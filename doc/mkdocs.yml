@@ -1,0 +1,46 @@
+site_name: RealPage Customer Interaction Knowledge Graph
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra_javascript:
+  - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+  - javascripts/mermaid-init.js
+
+nav:
+  - Strategy & Vision:
+      - Project Charter: index.md
+      - Product Positioning: product_positioning.md
+      - User Stories: user_stories.md
+  - Features & Capabilities:
+      - Hero Features: hero_features.md
+      - AI & Risk Model: ai_risk_model.md
+  - Engineering & Architecture:
+      - System Architecture: architecture.md
+      - Database Schema: database_schema.md
+      - API Reference: api_reference.md
+      - Developer Setup: developer_setup_guide.md
+  - Technical Strategy Guide:
+      - Overview & Data Strategy: technical_strategy_guide.md
+  - Demo & Execution Strategy:
+      - Data & Demo Plan: data_demo_plan.md
+      - Hackathon Strategy: hackathon_strategy.md

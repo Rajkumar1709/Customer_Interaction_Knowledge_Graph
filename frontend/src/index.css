@@ -1,0 +1,148 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  /* ── RealPage Exact Brand Colors (from cmsadmin.ws.realpage.com) ── */
+  --rp-navy:        #1B3A4B;   /* Top bar dark teal-navy */
+  --rp-blue:        #0078D4;   /* Primary action blue (buttons, links) */
+  --rp-blue-hover:  #006CBE;
+  --rp-blue-light:  #EBF4FB;   /* Light blue tint for panels */
+  --rp-red:         #C0392B;   /* RealPage logo red dot */
+  --rp-orange:      #E8700A;   /* RealPage logo orange dot */
+  --rp-dot-blue:    #0078D4;   /* RealPage logo blue dot */
+
+  /* ── Semantic Aliases ── */
+  --rp-blue-900:    #1B3A4B;
+  --rp-blue-600:    #0078D4;
+  --rp-blue-100:    #EBF4FB;
+  --rp-green-600:   #107C41;
+  --rp-red-600:     #C0392B;
+  --rp-amber-600:   #B45309;
+  --rp-purple-600:  #7C3AED;
+  --rp-teal-600:    #0F766E;
+
+  /* ── Surfaces ── */
+  --bg-color:       #F3F4F6;
+  --panel-bg:       #FFFFFF;
+  --glass-border:   #E1E5E9;
+  --glass-shadow:   0 2px 8px rgba(0,0,0,0.08);
+
+  /* ── Text ── */
+  --text-main:      #1A1A2E;
+  --text-muted:     #6B7280;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── RealPage-style Panel (flat white card, no blur) ── */
+.glass-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: 6px;
+}
+
+/* ── Layout ── */
+.app-container {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Top Bar — matches RealPage CMS exactly ── */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 1.25rem;
+  height: 52px;
+  background: var(--rp-navy);
+  color: white;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.main-content {
+  display: grid;
+  grid-template-columns: 280px 1fr 300px;
+  gap: 1rem;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+/* ── Typography ── */
+h1, h2, h3, h4 { font-weight: 600; }
+.text-rp-blue { color: var(--rp-blue); }
+
+/* ── RealPage-style Buttons ── */
+.btn-primary {
+  background: var(--rp-blue);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: background 0.15s;
+}
+.btn-primary:hover { background: var(--rp-blue-hover); }
+
+.btn-outline {
+  background: transparent;
+  color: var(--rp-blue);
+  border: 1px solid var(--rp-blue);
+  border-radius: 4px;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.15s;
+}
+.btn-outline:hover { background: var(--rp-blue-light); }
+
+/* ── Badges ── */
+.badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+.badge-critical { background: #FDECEA; color: #C0392B; border: 1px solid #FADBD8; }
+.badge-healthy  { background: #E9F7EF; color: #107C41; border: 1px solid #D5F0E0; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E0; border-radius: 3px; }
+
+/* ── Input ── */
+input[type="text"] {
+  font-family: 'Inter', sans-serif;
+  background: #FFFFFF;
+  font-size: 0.875rem;
+  border: 1px solid #D1D5DB;
+  border-radius: 4px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  color: var(--text-main);
+}
+input[type="text"]:focus {
+  border-color: var(--rp-blue) !important;
+  box-shadow: 0 0 0 2px rgba(0,120,212,0.15);
+  outline: none;
+}
+input[type="checkbox"] { accent-color: var(--rp-blue); }
