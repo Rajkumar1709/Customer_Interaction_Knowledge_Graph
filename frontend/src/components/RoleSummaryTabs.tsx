@@ -7,15 +7,18 @@ export default function RoleSummaryTabs({ roles }: { roles: any }) {
   if (!roles) return null;
 
   const tabs = [
+    { id: 'executive', label: 'Executive' },
     { id: 'sales', label: 'Sales' },
     { id: 'csm', label: 'Customer Success' },
+    { id: 'renewals', label: 'Renewals' },
     { id: 'support', label: 'Support' },
+    { id: 'implementation', label: 'Implementation' },
     { id: 'product', label: 'Product' }
   ];
 
   return (
     <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--glass-border)', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', borderBottom: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', borderBottom: '1px solid #E2E8F0', background: '#F8FAFC' }}>
         {tabs.map(tab => (
           <button
             key={tab.id}

@@ -11,7 +11,7 @@ interface Props {
   selectedGroupId?: string; // highlights the currently-selected group node
 }
 
-const NODE_COLORS: Record<string, string> = {
+export const NODE_COLORS: Record<string, string> = {
   Account:          '#00529B',
   Portfolio:        '#334155',
   Product:          '#0EA5E9',
@@ -34,19 +34,26 @@ export default function GraphView({ accountId, onNodeClick, onGraphLoad, selecte
 
   // ── Responsive container dimensions ─────────────────────────────────────────
   useEffect(() => {
-    const update = () => {
-      const container = document.getElementById('graph-container');
-      if (container) setDimensions({ width: container.clientWidth, height: container.clientHeight });
-    };
-    window.addEventListener('resize', update);
-    update(); setTimeout(update, 100);
-    return () => window.removeEventListener('resize', update);
+    const container = document.getElementById('graph-container');
+    if (!container) return;
+    
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setDimensions({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height
+        });
+      }
+    });
+    
+    observer.observe(container);
+    return () => observer.disconnect();
   }, []);
 
   // ── Fetch raw graph data ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!accountId) return;
-    axios.get(`http://localhost:8000/api/accounts/${accountId}/graph`)
+    axios.get(`/api/accounts/${accountId}/graph`)
       .then(res => {
         setRawGraphData(res.data);
         onGraphLoad?.(res.data);   // lift raw data to App for reference
@@ -69,19 +76,29 @@ export default function GraphView({ accountId, onNodeClick, onGraphLoad, selecte
       groups.get(n.label)!.push(n);
     });
 
-    const nodes: any[] = [{ ...accountNode }];
+    const numGroups = groups.size;
+    const radius = 160; // Fixed radius for radial layout
+    let i = 0;
+
+    // Center Account node
+    const nodes: any[] = [{ ...accountNode, fx: 0, fy: 0 }];
     const links: any[] = [];
 
     groups.forEach((items, label) => {
+      const angle = (i * 2 * Math.PI) / numGroups;
       const groupId = `group_${label}`;
+      
       nodes.push({
         id:      groupId,
         label,
         isGroup: true,
         count:   items.length,
         items,          // ← individual records, passed to AssociatedIssuesPanel
+        fx:      Math.cos(angle) * radius,
+        fy:      Math.sin(angle) * radius,
       });
       links.push({ source: groupId, target: accountNode.id });
+      i++;
     });
 
     return { nodes, links };
@@ -90,18 +107,21 @@ export default function GraphView({ accountId, onNodeClick, onGraphLoad, selecte
   // ── Physics tuning — group graph is sparse so lighter settings work well ─────
   useEffect(() => {
     if (fgRef.current && groupedData.nodes.length > 0) {
-      fgRef.current.d3Force('charge').strength(-260);
-      fgRef.current.d3Force('link').distance(110);
-      setTimeout(() => fgRef.current?.zoomToFit(400, 50), 600);
+      // Re-center when data or container dimensions change
+      setTimeout(() => fgRef.current?.zoomToFit(400, 70), 50);
     }
-  }, [groupedData]);
+  }, [groupedData, dimensions.width, dimensions.height]);
 
   // ── Canvas renderer ──────────────────────────────────────────────────────────
   const renderCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const { x, y, label, properties, isGroup, count } = node;
     const color      = NODE_COLORS[label] || '#999';
     const isSelected = node.id === selectedGroupId;
+    const hasSelection = selectedGroupId != null;
+    const isDimmed   = hasSelection && !isSelected && label !== 'Account';
     const size       = label === 'Account' ? 14 : isGroup ? 11 : 7;
+
+    ctx.globalAlpha = isDimmed ? 0.25 : 1.0;
 
     // Glow ring
     ctx.shadowColor = color;
@@ -154,6 +174,8 @@ export default function GraphView({ accountId, onNodeClick, onGraphLoad, selecte
       const displayName = isGroup ? label : (properties?.name || label);
       ctx.fillText(displayName, x, y + size + 3 / globalScale);
     }
+    
+    ctx.globalAlpha = 1.0; // Reset alpha
   }, [selectedGroupId]);
 
   return (
@@ -163,37 +185,28 @@ export default function GraphView({ accountId, onNodeClick, onGraphLoad, selecte
         width={dimensions.width}
         height={dimensions.height}
         graphData={groupedData}
+        cooldownTicks={0}
+        enableNodeDrag={false}
+        enableZoomInteraction={true}
+        enablePanInteraction={true}
         nodeCanvasObject={renderCanvasObject}
         nodeCanvasObjectMode={() => 'replace'}
-        linkColor={() => 'rgba(0,82,155,0.2)'}
+        linkColor={(link: any) => {
+          if (!selectedGroupId) return 'rgba(0,82,155,0.2)';
+          if (link.source.id === selectedGroupId || link.target.id === selectedGroupId) return 'rgba(0,82,155,0.6)';
+          return 'rgba(0,82,155,0.05)';
+        }}
         linkWidth={1.5}
         linkDirectionalParticles={4}
         linkDirectionalParticleSpeed={0.006}
         linkDirectionalParticleWidth={2.5}
         linkDirectionalParticleColor={() => 'rgba(0,82,155,0.7)'}
-        d3VelocityDecay={0.25}
         onNodeClick={(node: any) => {
-          fgRef.current?.centerAt(node.x, node.y, 800);
-          fgRef.current?.zoom(3.5, 1500);
+          if (node.id === selectedGroupId) return;
           onNodeClick(node);
         }}
       />
 
-      {/* Legend */}
-      <div style={{
-        position: 'absolute', bottom: '1rem', left: '1rem',
-        background: 'rgba(255,255,255,0.92)', borderRadius: '8px',
-        padding: '0.6rem 0.75rem', fontSize: '0.72rem',
-        display: 'flex', gap: '0.75rem', flexWrap: 'wrap',
-        backdropFilter: 'blur(6px)', border: '1px solid #E2E8F0',
-      }}>
-        {Object.entries(NODE_COLORS).map(([lbl, col]) => (
-          <span key={lbl} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#1E293B' }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: col, display: 'inline-block', flexShrink: 0 }} />
-            {lbl}
-          </span>
-        ))}
-      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { MessageSquare, Send, Loader2, X, Sparkles, Bot, ChevronDown } from 'lucide-react';
+import { MessageSquare, Send, Loader2, Sparkles, Bot, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const MessageBubble = ({ msg }: { msg: any }) => {
@@ -99,7 +99,7 @@ export default function AccountQAService({ accountId }: { accountId: string }) {
     setLoading(true);
 
     try {
-      const res = await axios.post(`http://localhost:8000/api/accounts/${accountId}/qa`, { question: userMsg });
+      const res = await axios.post(`/api/accounts/${accountId}/qa`, { question: userMsg });
       setChat(prev => [...prev, { role: 'ai', content: res.data.answer }]);
     } catch (err) {
       setChat(prev => [...prev, { role: 'ai', content: 'Sorry, I encountered an error retrieving the answer.' }]);

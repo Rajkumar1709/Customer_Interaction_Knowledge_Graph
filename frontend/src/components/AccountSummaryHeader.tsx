@@ -11,7 +11,7 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
       
       {/* Top Metrics Row */}
-      <div style={{ display: 'flex', gap: '1rem' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
         <motion.div 
           whileHover={{ scale: 1.02 }}
           style={{ flex: '0 0 auto', padding: '1.5rem', background: isCritical ? '#FEF2F2' : '#F0FDF4', borderRadius: '12px', border: `2px solid ${isCritical ? '#DC2626' : '#16A34A'}`, minWidth: '150px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
@@ -22,7 +22,7 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
         </motion.div>
 
         {account_plan && (
-          <div style={{ flex: 1, background: 'white', borderRadius: '12px', border: '1px solid var(--glass-border)', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+          <div style={{ flex: '1 1 300px', background: 'white', borderRadius: '12px', border: '1px solid var(--glass-border)', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <FileText size={18} style={{ color: account_plan.classification === 'Core' ? '#1D4ED8' : '#DC2626' }} />
@@ -33,18 +33,18 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
               </span>
             </div>
             
-            <div style={{ display: 'flex', gap: '2rem', marginTop: '0.5rem' }}>
-              <div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', marginTop: '0.5rem' }}>
+              <div style={{ flex: '1 1 120px' }}>
                 <div style={{ fontSize: '0.75rem', color: '#64748B', marginBottom: '0.2rem' }}>Primary Solution</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0F172A' }}>{account_plan.primary_solution}</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0F172A', wordBreak: 'break-word' }}>{account_plan.primary_solution}</div>
               </div>
-              <div>
+              <div style={{ flex: '1 1 120px' }}>
                 <div style={{ fontSize: '0.75rem', color: '#64748B', marginBottom: '0.2rem' }}>Secondary Solution</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0F172A' }}>{account_plan.secondary_solution || 'None'}</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0F172A', wordBreak: 'break-word' }}>{account_plan.secondary_solution || 'None'}</div>
               </div>
-              <div>
+              <div style={{ flex: '1 1 120px' }}>
                 <div style={{ fontSize: '0.75rem', color: '#64748B', marginBottom: '0.2rem' }}>Last Meeting</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0F172A' }}>{account_plan.last_meeting || 'No recent meetings'}</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0F172A', wordBreak: 'break-word' }}>{account_plan.last_meeting || 'No recent meetings'}</div>
               </div>
             </div>
 

@@ -26,7 +26,7 @@ interface Props {
 // ── Traffic-light helpers ─────────────────────────────────────────────────────
 function getSignal(score: number): { color: string; bg: string; border: string; label: string; emoji: string } {
   if (score < 40)  return { color: '#DC2626', bg: '#FEF2F2', border: '#FCA5A5', label: 'High Risk',  emoji: '🔴' };
-  if (score <= 70) return { color: '#D97706', bg: '#FFFBEB', border: '#FDE68A', label: 'Moderate',   emoji: '🟡' };
+  if (score <= 70) return { color: '#D97706', bg: '#FFFBEB', border: '#FDE68A', label: 'Moderate Risk',   emoji: '🟡' };
   return               { color: '#059669', bg: '#F0FDF4', border: '#BBF7D0', label: 'Low Risk',   emoji: '🟢' };
 }
 
@@ -65,7 +65,7 @@ export default function RiskPanel({ filters, selectedAccountId, onSelect }: Prop
       if (filters.renewal)        params.set('renewal', 'true');
       if (filters.implementation) params.set('implementation', 'true');
 
-      const res = await axios.get(`http://localhost:8000/api/accounts/search?${params}`);
+      const res = await axios.get(`/api/accounts/search?${params}`);
       const sorted: AccountSummary[] = (res.data.accounts || [])
         .slice()
         .sort((a: AccountSummary, b: AccountSummary) => a.health_score - b.health_score); // lowest = highest risk first
@@ -109,7 +109,7 @@ export default function RiskPanel({ filters, selectedAccountId, onSelect }: Prop
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
           <TrendingDown size={14} style={{ color: '#DC2626' }} />
           <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1E293B' }}>
-            Top Accounts by Risk
+            Risk-Prioritized PMCs
           </span>
           {!loading && (
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
@@ -189,84 +189,98 @@ export default function RiskPanel({ filters, selectedAccountId, onSelect }: Prop
           </div>
         ) : (
           <AnimatePresence mode="popLayout">
-            {visibleAccounts.map((acc, idx) => {
-              const sig      = getSignal(acc.health_score);
-              const selected = acc.id === selectedAccountId;
+            {(() => {
+              const elements: any[] = [];
+              visibleAccounts.forEach((acc, idx) => {
+                const sig = getSignal(acc.health_score);
+                const prevSig = idx > 0 ? getSignal(visibleAccounts[idx - 1].health_score) : null;
+                const showHeader = !prevSig || prevSig.label !== sig.label;
+                const selected = acc.id === selectedAccountId;
 
-              return (
-                <motion.div
-                  key={acc.id}
-                  layout
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ delay: Math.min(idx * 0.015, 0.4), type: 'spring', stiffness: 340, damping: 26 }}
-                  onClick={() => onSelect(acc.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.55rem',
-                    padding: '0.5rem 0.875rem',
-                    cursor: 'pointer',
-                    borderLeft: selected ? `3px solid #0078D4` : '3px solid transparent',
-                    background: selected ? '#EFF6FF' : 'transparent',
-                    transition: 'background 0.15s, border-color 0.15s',
-                  }}
-                  whileHover={selected ? {} : { backgroundColor: '#F8FAFC' }}
-                >
-                  {/* Rank number */}
-                  <span style={{
-                    fontSize: '0.62rem',
-                    fontWeight: 700,
-                    color: '#CBD5E1',
-                    width: '1.5rem',
-                    textAlign: 'right',
-                    flexShrink: 0,
-                  }}>
-                    {idx + 1}
-                  </span>
+                if (showHeader) {
+                  elements.push(
+                    <motion.div
+                      key={`header-${sig.label}`}
+                      layout
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      style={{ 
+                        padding: '0.4rem 0.875rem', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 800, 
+                        color: sig.color, background: sig.bg, borderTop: idx > 0 ? `1px solid ${sig.border}` : 'none', 
+                        borderBottom: `1px solid ${sig.border}`, display: 'flex', alignItems: 'center', gap: '0.4rem', 
+                        marginTop: idx > 0 ? '0.5rem' : '0' 
+                      }}
+                    >
+                      {sig.emoji} {sig.label}
+                    </motion.div>
+                  );
+                }
 
-                  {/* Traffic-light dot */}
-                  <span style={{
-                    width: 9,
-                    height: 9,
-                    borderRadius: '50%',
-                    background: sig.color,
-                    flexShrink: 0,
-                    boxShadow: `0 0 0 2px ${sig.color}30`,
-                  }} />
+                elements.push(
+                  <motion.div
+                    key={acc.id}
+                    layout
+                    initial={{ opacity: 0, x: -12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ delay: Math.min(idx * 0.015, 0.4), type: 'spring', stiffness: 340, damping: 26 }}
+                    onClick={() => onSelect(acc.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.55rem',
+                      padding: '0.5rem 0.875rem',
+                      cursor: 'pointer',
+                      borderLeft: selected ? `3px solid #0078D4` : '3px solid transparent',
+                      background: selected ? '#EFF6FF' : 'transparent',
+                      transition: 'background 0.15s, border-color 0.15s',
+                    }}
+                    whileHover={selected ? {} : { backgroundColor: '#F8FAFC' }}
+                  >
+                    {/* Traffic-light dot */}
+                    <span style={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: '50%',
+                      background: sig.color,
+                      flexShrink: 0,
+                      boxShadow: `0 0 0 2px ${sig.color}30`,
+                    }} />
 
-                  {/* Account name */}
-                  <span style={{
-                    flex: 1,
-                    fontSize: '0.8rem',
-                    fontWeight: selected ? 600 : 500,
-                    color: selected ? '#0078D4' : '#1E293B',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {acc.name}
-                  </span>
+                    {/* Account name */}
+                    <span style={{
+                      flex: 1,
+                      fontSize: '0.8rem',
+                      fontWeight: selected ? 600 : 500,
+                      color: selected ? '#0078D4' : '#1E293B',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {acc.name}
+                    </span>
 
-                  {/* Score badge */}
-                  <span style={{
-                    fontSize: '0.66rem',
-                    fontWeight: 700,
-                    padding: '0.18rem 0.42rem',
-                    borderRadius: '9px',
-                    color: sig.color,
-                    background: sig.bg,
-                    border: `1px solid ${sig.border}`,
-                    flexShrink: 0,
-                    minWidth: '2rem',
-                    textAlign: 'center',
-                  }}>
-                    {acc.health_score}
-                  </span>
-                </motion.div>
-              );
-            })}
+                    {/* Score badge */}
+                    <span style={{
+                      fontSize: '0.66rem',
+                      fontWeight: 700,
+                      padding: '0.18rem 0.42rem',
+                      borderRadius: '9px',
+                      color: sig.color,
+                      background: sig.bg,
+                      border: `1px solid ${sig.border}`,
+                      flexShrink: 0,
+                      minWidth: '2rem',
+                      textAlign: 'center',
+                    }}>
+                      {acc.health_score}
+                    </span>
+                  </motion.div>
+                );
+              });
+              return elements;
+            })()}
           </AnimatePresence>
         )}
       </div>

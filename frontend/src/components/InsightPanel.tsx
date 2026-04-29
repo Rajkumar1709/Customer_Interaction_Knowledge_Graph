@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, CheckCircle, Info, FileText, Heart } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, FileText } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -28,7 +28,7 @@ export default function InsightPanel({ accountId }: { accountId: string }) {
     setData(null); // Reset when account changes
     
     // Fetch directly from the Node.js Express backend API
-    axios.get(`http://localhost:8000/api/accounts/${accountId}/insights`)
+    axios.get(`/api/accounts/${accountId}/insights`)
       .then(res => setData(res.data))
       .catch(err => console.error("Error fetching insights:", err));
   }, [accountId]);

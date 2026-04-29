@@ -47,7 +47,7 @@ export default function TopNavSearch({ filters, onFiltersChange, onSelect }: Pro
     if (!q.trim()) { setResults([]); setOpen(false); return; }
     setLoading(true);
     try {
-      const res = await axios.get(`http://localhost:8000/api/accounts/search`, {
+      const res = await axios.get(`/api/accounts/search`, {
         params: { q, limit: 8 },
       });
       setResults(res.data.accounts || []);

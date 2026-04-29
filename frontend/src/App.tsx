@@ -2,16 +2,11 @@ import { useState, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import RiskPanel from './components/RiskPanel';
 import TopNavSearch from './components/TopNavSearch';
-import InsightPanel from './components/InsightPanel';
-import GraphView from './components/GraphView';
-import NodeDetailPanel from './components/NodeDetailPanel';
 import AssociatedIssuesPanel from './components/AssociatedIssuesPanel';
 import SplashScreen from './components/SplashScreen';
 import AccountDashboard from './components/AccountDashboard';
 import { Network, RotateCcw } from 'lucide-react';
 import './index.css';
-
-interface GraphData { nodes: any[]; links: any[]; }
 
 interface Filters {
   risky: boolean;
@@ -23,10 +18,8 @@ function App() {
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   // Group node clicked in the graph (e.g., clicking the "Ticket" node)
   const [selectedGroupNode, setSelectedGroupNode] = useState<any>(null);
-  // Individual issue card clicked inside AssociatedIssuesPanel
-  const [selectedIssue, setSelectedIssue]         = useState<any>(null);
-  const [showSplash, setShowSplash]               = useState(true);
-  const [graphData, setGraphData]                 = useState<GraphData>({ nodes: [], links: [] }); // kept for future use
+  const [, setSelectedIssue] = useState<any>(null);
+  const [showSplash, setShowSplash] = useState(true);
   const [filters, setFilters]                     = useState<Filters>({ risky: false, renewal: false, implementation: false });
 
   // ── Node click in the graph ─────────────────────────────────────────────────
@@ -59,7 +52,7 @@ function App() {
     setSelectedAccountId(id);
     setSelectedGroupNode(null);
     setSelectedIssue(null);
-    setGraphData({ nodes: [], links: [] });
+    setSelectedIssue(null);
   }, []);
 
   return (
@@ -132,7 +125,7 @@ function App() {
         ═══════════════════════════════════════════════════════ */}
         <main className="main-content" style={selectedAccountId ? { display: 'flex', gap: '0.875rem' } : {}}>
 
-          {/* Col 1: Top 100 Risk Panel (Always visible) */}
+          {/* Col 1: Risk Panel (Always visible) */}
           <aside className="glass-panel" style={selectedAccountId ? { width: '280px', flexShrink: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' } : { overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <RiskPanel
               filters={filters}
@@ -147,8 +140,8 @@ function App() {
               <AccountDashboard 
                 accountId={selectedAccountId} 
                 onNodeClick={handleNodeClick}
-                onGraphLoad={setGraphData}
                 selectedGroupId={selectedGroupNode?.id}
+                selectedGroupNode={selectedGroupNode}
               />
             </section>
           ) : (
@@ -177,7 +170,7 @@ function App() {
                   <div>
                     <div style={{ fontSize: '1rem', fontWeight: 700, color: '#1E293B', marginBottom: '0.4rem' }}>No Account Selected</div>
                     <div style={{ fontSize: '0.82rem', color: '#64748B', maxWidth: '280px', lineHeight: 1.7 }}>
-                      Choose a PMC from the <strong style={{ color: '#0078D4' }}>Top Accounts by Risk</strong> panel on the left to explore its customer interaction knowledge graph.
+                      Choose a PMC from the <strong style={{ color: '#0078D4' }}>Risk-Prioritized PMCs</strong> panel on the left to explore its customer interaction knowledge graph.
                     </div>
                   </div>
                 </div>

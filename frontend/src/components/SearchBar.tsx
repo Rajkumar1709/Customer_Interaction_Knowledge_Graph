@@ -33,7 +33,7 @@ export default function SearchBar({ onSelect }: { onSelect: (id: string) => void
       if (filters.renewal) params.set('renewal', 'true');
       if (filters.implementation) params.set('implementation', 'true');
 
-      const res = await axios.get(`http://localhost:8000/api/accounts/search?${params}`);
+      const res = await axios.get(`/api/accounts/search?${params}`);
       setResults(res.data.accounts);
       setTotalPages(res.data.totalPages);
       setTotal(res.data.total);
