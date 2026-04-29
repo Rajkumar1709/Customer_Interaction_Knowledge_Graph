@@ -9,6 +9,7 @@ const OpenAI = require('openai');
 const bqQueries = require('./queries');
 const { calculateHealthScore } = require('./healthScore');
 const { isReady: bqReady } = require('./bigquery');
+const { generateAccountIntelligence, answerGraphQuestion } = require('./customerIntelligence');
 
 const app = express();
 app.use(cors());
@@ -246,6 +247,88 @@ app.get('/api/accounts/:id/insights', async (req, res) => {
       account_plan: buildAccountPlan(nodes)
     });
   }
+});
+
+// ----------------------------------------------------
+// 4. Enhanced AI Intelligence (360 Briefing, Insights, Roles, Timeline)
+// ----------------------------------------------------
+app.get('/api/accounts/:id/intelligence', async (req, res) => {
+  const accountId = req.params.id;
+  
+  let accName = `Account ${accountId}`;
+  let score = 85;
+  let nodes = [];
+  let usedBigQuery = false;
+
+  // Extract Context
+  if (process.env.USE_BIGQUERY === 'true' && bqReady) {
+    try {
+      const graphData = await bqQueries.getAccountGraph(accountId);
+      nodes = graphData.nodes;
+      const accNode = nodes.find(n => n.label === 'Account');
+      if (accNode) accName = accNode.properties.name;
+      score = calculateHealthScore(nodes);
+      usedBigQuery = true;
+    } catch (err) {
+      console.error(`[Intelligence] BigQuery fallback for ${accountId}:`, err.message);
+    }
+  }
+
+  if (!usedBigQuery) {
+    const acc = db.accounts.find(a => a.id === accountId);
+    if (!acc) return res.status(404).json({ error: "Account not found" });
+    accName = acc.name;
+    score = acc.health_score;
+    const graph = db.graphMap[accountId];
+    nodes = graph ? graph.nodes : [];
+  }
+
+  const result = await generateAccountIntelligence(accountId, accName, score, nodes);
+  if (result.success) {
+    result.data.account_plan = buildAccountPlan(nodes);
+    res.json(result.data);
+  } else {
+    // Fallback if LLM fails
+    res.status(500).json({ 
+      error: "AI generation failed", 
+      timeline: result.timeline,
+      risk_score: score,
+      account_plan: buildAccountPlan(nodes)
+    });
+  }
+});
+
+// ----------------------------------------------------
+// 5. Ask Anything (Natural Language Q&A)
+// ----------------------------------------------------
+app.post('/api/accounts/:id/qa', async (req, res) => {
+  const accountId = req.params.id;
+  const { question } = req.body;
+  if (!question) return res.status(400).json({ error: "Question is required" });
+
+  let accName = `Account ${accountId}`;
+  let nodes = [];
+  let usedBigQuery = false;
+
+  if (process.env.USE_BIGQUERY === 'true' && bqReady) {
+    try {
+      const graphData = await bqQueries.getAccountGraph(accountId);
+      nodes = graphData.nodes;
+      const accNode = nodes.find(n => n.label === 'Account');
+      if (accNode) accName = accNode.properties.name;
+      usedBigQuery = true;
+    } catch (err) {}
+  }
+
+  if (!usedBigQuery) {
+    const acc = db.accounts.find(a => a.id === accountId);
+    if (acc) accName = acc.name;
+    const graph = db.graphMap[accountId];
+    nodes = graph ? graph.nodes : [];
+  }
+
+  const result = await answerGraphQuestion(accName, nodes, question);
+  res.json(result);
 });
 
 function buildAccountPlan(nodes) {

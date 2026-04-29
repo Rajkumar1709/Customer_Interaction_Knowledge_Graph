@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GitBranch } from 'lucide-react';
 
@@ -16,7 +15,6 @@ const NODE_COLORS: Record<string, string> = {
   AccountPlan:     '#1D4ED8',
 };
 
-// Light-tinted background for each node type (≈10% opacity of the brand color)
 const NODE_BG: Record<string, string> = {
   Ticket:          '#FFF1F1',
   BillingIssue:    '#FFF7ED',
@@ -30,7 +28,6 @@ const NODE_BG: Record<string, string> = {
   AccountPlan:     '#EFF6FF',
 };
 
-// Border tint (slightly more saturated than bg)
 const NODE_BORDER: Record<string, string> = {
   Ticket:          '#FCA5A5',
   BillingIssue:    '#FCD34D',
@@ -56,9 +53,6 @@ const NODE_ICONS: Record<string, string> = {
   RenewalChatter:  '💬',
   AccountPlan:     '📋',
 };
-
-// Labels that qualify as "issues" to surface in this panel
-const ISSUE_LABELS = new Set(Object.keys(NODE_COLORS));
 
 /**
  * Returns a concise display label for a node based on its type + properties.
@@ -100,43 +94,21 @@ function getNodeSub(node: any): string | null {
   }
 }
 
-interface GraphData { nodes: any[]; links: any[]; }
-
 interface Props {
-  selectedNode: any | null;
-  graphData: GraphData;
+  selectedGroupNode: any | null; // group node clicked in graph — carries .items[]
   onIssueClick: (node: any) => void;
 }
 
-export default function AssociatedIssuesPanel({ selectedNode, graphData, onIssueClick }: Props) {
+export default function AssociatedIssuesPanel({ selectedGroupNode, onIssueClick }: Props) {
 
-  // ── Derive issue nodes connected to the selected node ────────────────────
-  const issueNodes = useMemo(() => {
-    if (!selectedNode || !graphData.nodes.length) return [];
+  // ── Issue list comes directly from the group node's .items array ─────────
+  // No link-traversal needed — GraphView pre-groups them for us.
+  const issueNodes: any[] = selectedGroupNode?.items || [];
 
-    const selectedId = selectedNode.id;
-
-    // Collect IDs of all directly connected nodes
-    const connectedIds = new Set<string>();
-    for (const link of graphData.links) {
-      // After force-graph processes links, source/target become node objects
-      const srcId = typeof link.source === 'object' ? link.source?.id : link.source;
-      const tgtId = typeof link.target === 'object' ? link.target?.id : link.target;
-      if (srcId === selectedId) connectedIds.add(tgtId);
-      if (tgtId === selectedId) connectedIds.add(srcId);
-    }
-
-    // Filter those nodes to only "issue" types
-    return graphData.nodes.filter(
-      (n) => connectedIds.has(n.id) && ISSUE_LABELS.has(n.label)
-    );
-  }, [selectedNode, graphData]);
-
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
-      {/* Panel Header */}
+      {/* ── Panel Header ─────────────────────────────────────────────────── */}
       <div style={{
         padding: '0.75rem 1rem',
         borderBottom: '1px solid var(--glass-border)',
@@ -149,9 +121,9 @@ export default function AssociatedIssuesPanel({ selectedNode, graphData, onIssue
         <GitBranch size={15} style={{ color: 'var(--rp-blue)' }} />
         <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--rp-blue)', lineHeight: 1 }}>
           Issues Associated
-          {selectedNode && (
+          {selectedGroupNode && (
             <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.35rem', fontSize: '0.78rem' }}>
-              — {selectedNode.label}
+              — {selectedGroupNode.label}
             </span>
           )}
         </span>
@@ -171,12 +143,12 @@ export default function AssociatedIssuesPanel({ selectedNode, graphData, onIssue
         )}
       </div>
 
-      {/* Panel Body */}
+      {/* ── Panel Body ───────────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0.875rem' }}>
         <AnimatePresence mode="wait">
 
-          {/* Default state: no node selected */}
-          {!selectedNode && (
+          {/* State 1: No group node selected yet */}
+          {!selectedGroupNode && (
             <motion.div
               key="empty-default"
               initial={{ opacity: 0 }}
@@ -188,7 +160,6 @@ export default function AssociatedIssuesPanel({ selectedNode, graphData, onIssue
                 minHeight: '200px', textAlign: 'center', padding: '1.25rem',
               }}
             >
-              {/* Branch / issues SVG illustration */}
               <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
                 <rect x="3" y="3" width="54" height="54" rx="14" fill="#EFF6FF" stroke="#BFDBFE" strokeWidth="2"/>
                 <circle cx="30" cy="16" r="5" fill="#3B82F6"/>
@@ -213,8 +184,8 @@ export default function AssociatedIssuesPanel({ selectedNode, graphData, onIssue
             </motion.div>
           )}
 
-          {/* Node selected but no issues */}
-          {selectedNode && issueNodes.length === 0 && (
+          {/* State 2: Group node selected but it has no items */}
+          {selectedGroupNode && issueNodes.length === 0 && (
             <motion.div
               key="empty-no-issues"
               initial={{ opacity: 0, y: 10 }}
@@ -226,7 +197,6 @@ export default function AssociatedIssuesPanel({ selectedNode, graphData, onIssue
                 minHeight: '200px', textAlign: 'center', padding: '1.25rem',
               }}
             >
-              {/* Clean checkmark shield SVG */}
               <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
                 <rect x="3" y="3" width="50" height="50" rx="13" fill="#F0FDF4" stroke="#BBF7D0" strokeWidth="2"/>
                 <path d="M28 12 L40 18 L40 28 C40 35 28 42 28 42 C28 42 16 35 16 28 L16 18 Z" fill="#BBF7D0" stroke="#86EFAC" strokeWidth="1.5"/>
@@ -236,7 +206,7 @@ export default function AssociatedIssuesPanel({ selectedNode, graphData, onIssue
                 <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#065F46', marginBottom: '0.35rem' }}>All Clear</div>
                 <div style={{ fontSize: '0.78rem', color: '#64748B', maxWidth: '175px', lineHeight: 1.7 }}>
                   No issues associated with this{' '}
-                  <strong style={{ color: '#059669' }}>{selectedNode.label}</strong>.
+                  <strong style={{ color: '#059669' }}>{selectedGroupNode.label}</strong>.
                 </div>
               </div>
               <div style={{ padding: '0.45rem 0.75rem', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', fontSize: '0.75rem', color: '#047857', fontWeight: 500 }}>
@@ -245,22 +215,22 @@ export default function AssociatedIssuesPanel({ selectedNode, graphData, onIssue
             </motion.div>
           )}
 
-          {/* Issue cards */}
-          {selectedNode && issueNodes.length > 0 && (
+          {/* State 3: Issue cards */}
+          {selectedGroupNode && issueNodes.length > 0 && (
             <motion.div
-              key={`issues-${selectedNode.id}`}
+              key={`issues-${selectedGroupNode.id}`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}
             >
               {issueNodes.map((issue, idx) => {
-                const color   = NODE_COLORS[issue.label] || '#64748B';
-                const bg      = NODE_BG[issue.label]     || '#F8FAFC';
-                const border  = NODE_BORDER[issue.label] || '#E2E8F0';
-                const icon    = NODE_ICONS[issue.label]  || '●';
-                const title   = getNodeTitle(issue);
-                const sub     = getNodeSub(issue);
+                const color  = NODE_COLORS[issue.label]  || '#64748B';
+                const bg     = NODE_BG[issue.label]      || '#F8FAFC';
+                const border = NODE_BORDER[issue.label]  || '#E2E8F0';
+                const icon   = NODE_ICONS[issue.label]   || '●';
+                const title  = getNodeTitle(issue);
+                const sub    = getNodeSub(issue);
 
                 return (
                   <motion.div
@@ -272,16 +242,16 @@ export default function AssociatedIssuesPanel({ selectedNode, graphData, onIssue
                     whileTap={{ scale: 0.98 }}
                     onClick={() => onIssueClick(issue)}
                     style={{
-                      background: bg,
-                      border: `1px solid ${border}`,
-                      borderLeft: `4px solid ${color}`,
+                      background:   bg,
+                      border:       `1px solid ${border}`,
+                      borderLeft:   `4px solid ${color}`,
                       borderRadius: '8px',
-                      padding: '0.65rem 0.75rem',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0.3rem',
-                      transition: 'box-shadow 0.15s',
+                      padding:      '0.65rem 0.75rem',
+                      cursor:       'pointer',
+                      display:      'flex',
+                      flexDirection:'column',
+                      gap:          '0.3rem',
+                      transition:   'box-shadow 0.15s',
                     }}
                     onMouseEnter={e => (e.currentTarget.style.boxShadow = `0 2px 10px ${color}30`)}
                     onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
@@ -289,44 +259,25 @@ export default function AssociatedIssuesPanel({ selectedNode, graphData, onIssue
                     {/* Label row */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <span style={{ fontSize: '0.88rem' }}>{icon}</span>
-                      <span style={{
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
-                        color,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.06em',
-                      }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                         {issue.label}
                       </span>
-                      {/* Arrow hint */}
                       <span style={{ marginLeft: 'auto', color, fontSize: '0.75rem', opacity: 0.7 }}>›</span>
                     </div>
 
                     {/* Title */}
-                    <div style={{
-                      fontSize: '0.82rem',
-                      fontWeight: 600,
-                      color: '#1E293B',
-                      lineHeight: 1.3,
-                      wordBreak: 'break-word',
-                    }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#1E293B', lineHeight: 1.3, wordBreak: 'break-word' }}>
                       {title}
                     </div>
 
-                    {/* Subtitle / status */}
+                    {/* Subtitle / status badge */}
                     {sub && (
                       <div style={{
-                        fontSize: '0.72rem',
-                        color: '#64748B',
-                        background: 'rgba(255,255,255,0.7)',
-                        padding: '0.15rem 0.45rem',
-                        borderRadius: '4px',
-                        border: '1px solid rgba(0,0,0,0.06)',
-                        alignSelf: 'flex-start',
-                        maxWidth: '100%',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        fontSize: '0.72rem', color: '#64748B',
+                        background: 'rgba(255,255,255,0.7)', padding: '0.15rem 0.45rem',
+                        borderRadius: '4px', border: '1px solid rgba(0,0,0,0.06)',
+                        alignSelf: 'flex-start', maxWidth: '100%',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
                         {sub}
                       </div>
@@ -336,6 +287,7 @@ export default function AssociatedIssuesPanel({ selectedNode, graphData, onIssue
               })}
             </motion.div>
           )}
+
         </AnimatePresence>
       </div>
     </div>
