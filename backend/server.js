@@ -9,11 +9,39 @@ const OpenAI = require('openai');
 const bqQueries = require('./queries');
 const { calculateHealthScore } = require('./healthScore');
 const { isReady: bqReady } = require('./bigquery');
-const { generateAccountIntelligence, answerGraphQuestion } = require('./customerIntelligence');
+const { generateAccountIntelligence, answerGraphQuestion, analyzeNodeGroup } = require('./customerIntelligence');
+
+const { getCache, setCache } = require('./cache');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// ----------------------------------------------------
+// Caching Middleware (Speeds up repeated API requests)
+// ----------------------------------------------------
+app.use('/api', (req, res, next) => {
+  const isPost = req.method === 'POST';
+  // Create a unique cache key based on URL and Body (for POST requests)
+  const cacheKey = req.originalUrl + (isPost ? '_' + JSON.stringify(req.body) : '');
+  
+  const cachedData = getCache(cacheKey);
+  if (cachedData) {
+    console.log(`[Cache] ⚡ HIT: ${req.originalUrl}`);
+    return res.json(cachedData);
+  }
+  
+  // Hook res.json to save the response to cache before sending
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    // Cache for 5 minutes (ignoring errors)
+    if (!body.error && body.success !== false) {
+      setCache(cacheKey, body);
+    }
+    originalJson(body);
+  };
+  next();
+});
 
 // Initialize OpenAI client using the Hackathon provided key
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -137,10 +165,15 @@ app.get('/api/accounts/:id/insights', async (req, res) => {
       const graphData = await bqQueries.getAccountGraph(accountId);
       nodes = graphData.nodes;
       const accNode = nodes.find(n => n.label === 'Account');
-      if (accNode) accName = accNode.properties.name;
+      if (accNode) {
+        accName = accNode.properties.name;
+        if (accNode.properties.health_score !== undefined) {
+          score = accNode.properties.health_score;
+        } else {
+          score = calculateHealthScore(nodes);
+        }
+      }
       
-      // Calculate dynamic score from BQ signals
-      score = calculateHealthScore(nodes);
       usedBigQuery = true;
       console.log(`[Insights] Generating insights using BigQuery context for ${accountId}.`);
     } catch (err) {
@@ -266,8 +299,14 @@ app.get('/api/accounts/:id/intelligence', async (req, res) => {
       const graphData = await bqQueries.getAccountGraph(accountId);
       nodes = graphData.nodes;
       const accNode = nodes.find(n => n.label === 'Account');
-      if (accNode) accName = accNode.properties.name;
-      score = calculateHealthScore(nodes);
+      if (accNode) {
+        accName = accNode.properties.name;
+        if (accNode.properties.health_score !== undefined) {
+          score = accNode.properties.health_score;
+        } else {
+          score = calculateHealthScore(nodes);
+        }
+      }
       usedBigQuery = true;
     } catch (err) {
       console.error(`[Intelligence] BigQuery fallback for ${accountId}:`, err.message);
@@ -331,6 +370,19 @@ app.post('/api/accounts/:id/qa', async (req, res) => {
   res.json(result);
 });
 
+// ----------------------------------------------------
+// 6. Node-Specific AI Analysis
+// ----------------------------------------------------
+app.post('/api/nodes/analyze', async (req, res) => {
+  const { label, items } = req.body;
+  if (!label || !items || !Array.isArray(items)) {
+    return res.status(400).json({ error: "Label and items array are required" });
+  }
+
+  const result = await analyzeNodeGroup(label, items);
+  res.json(result);
+});
+
 function buildAccountPlan(nodes) {
   const apNode = nodes.find(n => n.label === 'AccountPlan');
   if (!apNode) return null;
@@ -349,6 +401,21 @@ function buildAccountPlan(nodes) {
     pme_open: pmeOpen,
     last_meeting: meetingNode ? meetingNode.properties.date : null
   };
+}
+
+// ----------------------------------------------------
+// 7. Serve React Frontend (Single-Service Deployment)
+// ----------------------------------------------------
+const frontendDistPath = path.join(__dirname, '../frontend/dist');
+if (fs.existsSync(frontendDistPath)) {
+  console.log(`[Server] Serving static frontend from: ${frontendDistPath}`);
+  app.use(express.static(frontendDistPath));
+  
+  // Catch-all route to serve index.html for React Router
+  app.get('*', (req, res) => {
+    if (req.originalUrl.startsWith('/api')) return res.status(404).json({ error: 'API route not found' });
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
 }
 
 const PORT = process.env.PORT || 8000;

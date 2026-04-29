@@ -15,23 +15,25 @@ async function searchAccounts(searchTerm, limit = 15, filters = {}) {
     SELECT 
       a.Id as id,
       a.Name as name,
-      COUNT(c.Id) as critical_tickets
+      (SELECT COUNT(Id) FROM ${T('SFDC_Case')} c WHERE c.AccountId = a.Id AND c.Status NOT LIKE '%Closed%' AND c.Status NOT LIKE '%Resolved%' AND c.Status NOT LIKE '%Completed%' AND c.Priority LIKE 'P1%') as p1_cases,
+      (SELECT COUNT(Id) FROM ${T('SFDC_Case')} c WHERE c.AccountId = a.Id AND c.Status NOT LIKE '%Closed%' AND c.Status NOT LIKE '%Resolved%' AND c.Status NOT LIKE '%Completed%' AND c.Priority LIKE 'P2%') as p2_cases,
+      (SELECT COUNT(Id) FROM ${T('SFDC_ClientHealthEvents__c')} h WHERE h.Accounts__c = a.Id AND h.Status__c = 'Open') as open_health_events,
+      (SELECT COUNT(Id) FROM ${T('SFDC_ProblemManagementEscalation')} p WHERE p.PW_Account_Name__c = a.Id AND p.Escalation_Status__c IN ('Open', 'New')) as open_pmes,
+      (SELECT COUNT(Id) FROM ${T('SFDC_Cancellation')} canc WHERE canc.PMC__c = a.Id) as cancellations,
+      (SELECT COUNT(Id) FROM ${T('SFDC_Order__c')} ord WHERE ord.PMC__c = a.Id AND ord.Phase__c = 'Stalled') as stalled_impl,
+      IF(a.Core__c = false, 1, 0) as is_non_core
     FROM ${T('SFDC_Accounts')} a
-    LEFT JOIN ${T('SFDC_Case')} c ON c.AccountId = a.Id 
-      AND c.Status NOT LIKE '%Closed%' 
-      AND c.Status NOT LIKE '%Resolved%' 
-      AND c.Status NOT LIKE '%Completed%'
     WHERE (LOWER(a.Name) LIKE LOWER(@searchTerm) OR LOWER(a.Id) LIKE LOWER(@searchTerm))
     ${filters.renewal ? `AND EXISTS (SELECT 1 FROM ${T('SFDC_Opportunity')} o WHERE o.AccountId = a.Id AND o.StageName LIKE '%Renewal%')` : ''}
     ${filters.implementation ? `AND EXISTS (SELECT 1 FROM ${T('SFDC_Order__c')} ord WHERE ord.PMC__c = a.Id AND ord.Implementation_Completion_Date__c IS NULL)` : ''}
-    GROUP BY a.Id, a.Name
+    ORDER BY open_pmes DESC, open_health_events DESC, p1_cases DESC
     LIMIT @limit
   `;
   const rows = await query(sql, { searchTerm: `%${searchTerm}%`, limit });
   return rows.map(r => ({
     id: r.id,
     name: r.name,
-    health_score: Math.max(0, 100 - (r.critical_tickets * 5))
+    health_score: Math.max(0, 100 - (r.p1_cases * 15) - (r.p2_cases * 8) - (r.open_health_events * 10) - (r.open_pmes * 12) - (r.stalled_impl * 10) - (r.cancellations > 0 ? 20 : 0) - (r.is_non_core * 10))
   }));
 }
 
@@ -43,15 +45,22 @@ async function getAccountGraph(accountId) {
   const queries = {
     // ── 1. Account (PMC) ── rich profile fields
     account: query(`
-      SELECT Id, Name, 
-        client_success_manager__r_name, client_success_manager__r_email,
-        Total_ACV__c, Total_Units_f__c, Total_Properties_f__c,
-        Risk_Level__c, Core__c, Account_Tier__c, Territory__c,
-        Business_Type__c, Primary_Type__c,
-        Property_Mgmt_Solution_Primary__c, Property_Mgmt_Solution_Secondary__c,
-        BillingCity, BillingState, BillingCountry,
-        OMS_Account_ID__c
-      FROM ${T('SFDC_Accounts')} WHERE Id = @id`, { id: accountId }),
+      SELECT a.Id, a.Name, 
+        a.client_success_manager__r_name, a.client_success_manager__r_email,
+        a.Total_ACV__c, a.Total_Units_f__c, a.Total_Properties_f__c,
+        a.Risk_Level__c, a.Core__c, a.Account_Tier__c, a.Territory__c,
+        a.Business_Type__c, a.Primary_Type__c,
+        a.Property_Mgmt_Solution_Primary__c, a.Property_Mgmt_Solution_Secondary__c,
+        a.BillingCity, a.BillingState, a.BillingCountry,
+        a.OMS_Account_ID__c,
+        (SELECT COUNT(Id) FROM ${T('SFDC_Case')} c WHERE c.AccountId = a.Id AND c.Status NOT LIKE '%Closed%' AND c.Status NOT LIKE '%Resolved%' AND c.Status NOT LIKE '%Completed%' AND c.Priority LIKE 'P1%') as p1_cases,
+        (SELECT COUNT(Id) FROM ${T('SFDC_Case')} c WHERE c.AccountId = a.Id AND c.Status NOT LIKE '%Closed%' AND c.Status NOT LIKE '%Resolved%' AND c.Status NOT LIKE '%Completed%' AND c.Priority LIKE 'P2%') as p2_cases,
+        (SELECT COUNT(Id) FROM ${T('SFDC_ClientHealthEvents__c')} h WHERE h.Accounts__c = a.Id AND h.Status__c = 'Open') as open_health_events,
+        (SELECT COUNT(Id) FROM ${T('SFDC_ProblemManagementEscalation')} p WHERE p.PW_Account_Name__c = a.Id AND p.Escalation_Status__c IN ('Open', 'New')) as open_pmes,
+        (SELECT COUNT(Id) FROM ${T('SFDC_Cancellation')} canc WHERE canc.PMC__c = a.Id) as cancellations,
+        (SELECT COUNT(Id) FROM ${T('SFDC_Order__c')} ord WHERE ord.PMC__c = a.Id AND ord.Phase__c = 'Stalled') as stalled_impl,
+        IF(a.Core__c = false, 1, 0) as is_non_core
+      FROM ${T('SFDC_Accounts')} a WHERE a.Id = @id`, { id: accountId }),
 
     // ── 2. Support Tickets ── all actionable case fields
     // Capped at 20 most recent open tickets — prevents graph explosion on large accounts
@@ -137,11 +146,21 @@ async function getAccountGraph(accountId) {
 
   // ── 1. Account Node (Center) ──
   const acc = data.account[0] || {};
+  const p1 = acc.p1_cases || 0;
+  const p2 = acc.p2_cases || 0;
+  const ohe = acc.open_health_events || 0;
+  const opme = acc.open_pmes || 0;
+  const si = acc.stalled_impl || 0;
+  const canc = acc.cancellations || 0;
+  const ncore = acc.is_non_core || 0;
+  const calculatedScore = Math.max(0, 100 - (p1 * 15) - (p2 * 8) - (ohe * 10) - (opme * 12) - (si * 10) - (canc > 0 ? 20 : 0) - (ncore * 10));
+
   nodes.push({
     id: accountId,
     label: 'Account',
     properties: {
       name: acc.Name || `Account (${accountId})`,
+      health_score: calculatedScore,
       csm: acc.client_success_manager__r_name || 'Unassigned',
       csm_email: acc.client_success_manager__r_email || '',
       total_acv: acc.Total_ACV__c ? `$${Number(acc.Total_ACV__c).toLocaleString()}` : 'N/A',

@@ -100,6 +100,9 @@ Your goal is to generate a comprehensive, judge-ready JSON response with the fol
    - "csm": Focus on adoption, health, and next best actions.
    - "support": Focus on ticket volume, escalations, and technical friction.
    - "product": Focus on feature requests or systemic implementation blockers.
+   - "executive": Focus on total revenue at risk, overall health, and strategic churn signals.
+   - "implementation": Focus on onboarding bottlenecks, stalled phases, and SLA violations.
+   - "renewals": Focus on upcoming contract dates, competitor presence, and cancellation history.
 4. "next_best_actions": Array of 3 highly actionable, pragmatic recommendations for the CSM.
 
 Ensure your analysis is heavily grounded in the provided data. Do not hallucinate data that is not in the context.
@@ -176,8 +179,59 @@ ${JSON.stringify(nodes.map(n => ({ label: n.label, ...n.properties })))}
   }
 }
 
+/**
+ * Analyzes a specific group of nodes to extract data-grounded insights 
+ * without including raw email clutter.
+ */
+async function analyzeNodeGroup(label, items) {
+  try {
+    const systemPrompt = `You are an Enterprise AI Customer Intelligence Assistant. 
+You are analyzing a specific group of "${label}" records for an account.
+Your task is to extract a strictly data-grounded analysis of the impact, context, and action items.
+
+CRITICAL INSTRUCTIONS:
+1. Do NOT hallucinate or assume any information. Only use the data provided.
+2. DO NOT include raw email threads, long raw descriptions, or clutter. Summarize the analytical points cleanly.
+3. If there are no action items in the data, explicitly state "No action items available in dataset".
+
+You MUST respond with a strictly formatted JSON object matching this schema:
+{
+  "impact_analysis": ["Bullet point 1 regarding quantifiable or business impact", "Bullet point 2"],
+  "issue_context": ["Clean summary of the core issue 1 without email clutter", "Clean summary of issue 2"],
+  "action_items": ["Action item 1 found in data", "Action item 2 found in data"]
+}
+
+Data Context to Analyze:
+${JSON.stringify(items.map(item => item.properties || {}))}
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: "Analyze these records and provide the clean JSON summary." }
+      ],
+      response_format: { type: "json_object" }
+    });
+
+    const parsedResponse = JSON.parse(completion.choices[0].message.content);
+    return { success: true, analysis: parsedResponse };
+  } catch (error) {
+    console.error("Node analysis failed:", error.message);
+    return { 
+      success: false, 
+      analysis: { 
+        impact_analysis: ["Analysis currently unavailable."], 
+        issue_context: ["Data could not be processed."], 
+        action_items: [] 
+      } 
+    };
+  }
+}
+
 module.exports = {
   buildTimeline,
   generateAccountIntelligence,
-  answerGraphQuestion
+  answerGraphQuestion,
+  analyzeNodeGroup
 };

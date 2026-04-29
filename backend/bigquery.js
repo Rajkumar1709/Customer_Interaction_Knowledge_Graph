@@ -9,19 +9,30 @@ const KEY_PATH = path.resolve(__dirname, 'GCPKey.json');
 
 let client = null;
 
-// Graceful initialization: Check if the key exists before trying to connect
-if (fs.existsSync(KEY_PATH)) {
+// Graceful initialization: Check ENV var first, then fallback to local file
+if (process.env.GCP_CREDENTIALS) {
+  try {
+    const credentials = JSON.parse(process.env.GCP_CREDENTIALS);
+    client = new BigQuery({
+      projectId: PROJECT_ID,
+      credentials,
+    });
+    console.log(`[BigQuery] ✅ Initialized successfully using ENV credentials for project: ${PROJECT_ID}`);
+  } catch (error) {
+    console.error(`[BigQuery] ❌ Initialization from ENV failed:`, error.message);
+  }
+} else if (fs.existsSync(KEY_PATH)) {
   try {
     client = new BigQuery({
       projectId: PROJECT_ID,
       keyFilename: KEY_PATH,
     });
-    console.log(`[BigQuery] ✅ Initialized successfully for project: ${PROJECT_ID}`);
+    console.log(`[BigQuery] ✅ Initialized successfully using local GCPKey.json for project: ${PROJECT_ID}`);
   } catch (error) {
-    console.error(`[BigQuery] ❌ Initialization failed:`, error.message);
+    console.error(`[BigQuery] ❌ Initialization from local file failed:`, error.message);
   }
 } else {
-  console.warn(`[BigQuery] ⚠️ GCPKey.json NOT FOUND at ${KEY_PATH}`);
+  console.warn(`[BigQuery] ⚠️ No GCP credentials found (ENV or local file).`);
   console.warn(`[BigQuery] ⚠️ Running in Mock Data Fallback Mode.`);
 }
 
