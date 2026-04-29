@@ -3,27 +3,35 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const Groq = require('groq-sdk');
+const OpenAI = require('openai');
+
+// BigQuery Integration Modules
+const bqQueries = require('./queries');
+const { calculateHealthScore } = require('./healthScore');
+const { isReady: bqReady } = require('./bigquery');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Initialize Groq client (OpenAI-compatible, free tier)
-const openai = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Initialize OpenAI client using the Hackathon provided key
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Load the 1500 simulated PMC Graph Database
+// Load the 1500 simulated PMC Graph Database (Fallback Mechanism)
 let db = { accounts: [], graphMap: {} };
 try {
   const dbPath = path.join(__dirname, '../frontend/src/data/mockDb.json');
   const rawData = fs.readFileSync(dbPath);
   db = JSON.parse(rawData);
-  console.log(`Loaded ${db.accounts.length} PMCs into memory.`);
+  console.log(`[MockDB] ✅ Loaded ${db.accounts.length} PMCs into memory.`);
 } catch (e) {
-  console.error("Warning: mockDb.json not found.");
+  console.error("[MockDB] Warning: mockDb.json not found.");
 }
 
-app.get('/api/accounts/search', (req, res) => {
+// ----------------------------------------------------
+// 1. Account Search (Dual-Source)
+// ----------------------------------------------------
+app.get('/api/accounts/search', async (req, res) => {
   const query = (req.query.q || '').toLowerCase();
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 15;
@@ -31,22 +39,37 @@ app.get('/api/accounts/search', (req, res) => {
   const renewal = req.query.renewal === 'true';
   const implementation = req.query.implementation === 'true';
 
-  let results = db.accounts;
+  let results = [];
+  let usedBigQuery = false;
 
-  // Text search
-  if (query) {
-    results = results.filter(acc =>
-      acc.name.toLowerCase().includes(query) || acc.id.toLowerCase().includes(query)
-    );
+  // Attempt BigQuery First
+  if (process.env.USE_BIGQUERY === 'true' && bqReady) {
+    try {
+      results = await bqQueries.searchAccounts(query, limit * page, { risky, renewal, implementation });
+      usedBigQuery = true;
+      console.log(`[Search] Fetched from BigQuery. Query: "${query}"`);
+    } catch (err) {
+      console.error("[Search] ⚠️ BigQuery fallback triggered:", err.message);
+    }
   }
 
-  // Filter: Show Risky Accounts (health < 50)
+  // Graceful Fallback to Mock Data (Only runs if BQ is disabled or fails)
+  if (!usedBigQuery) {
+    results = db.accounts;
+    if (query) {
+      results = results.filter(acc =>
+        acc.name.toLowerCase().includes(query) || acc.id.toLowerCase().includes(query)
+      );
+    }
+  }
+
+  // Filter: Show Risky Accounts (Runs for both BQ and Mock because health_score is already calculated)
   if (risky) {
     results = results.filter(acc => acc.health_score < 50);
   }
 
-  // Filter: Renewal < 90 Days
-  if (renewal) {
+  // Filter: Renewal < 90 Days (Only runs on mock data; BigQuery handles this natively via SQL EXISTS clause)
+  if (renewal && !usedBigQuery) {
     results = results.filter(acc => {
       const graph = db.graphMap[acc.id];
       if (!graph) return false;
@@ -54,8 +77,8 @@ app.get('/api/accounts/search', (req, res) => {
     });
   }
 
-  // Filter: Stalled Implementation
-  if (implementation) {
+  // Filter: Stalled Implementation (Only runs on mock data; BigQuery handles this natively via SQL EXISTS clause)
+  if (implementation && !usedBigQuery) {
     results = results.filter(acc => {
       const graph = db.graphMap[acc.id];
       if (!graph) return false;
@@ -67,33 +90,79 @@ app.get('/api/accounts/search', (req, res) => {
   const totalPages = Math.ceil(total / limit);
   const paginated = results.slice((page - 1) * limit, page * limit);
 
-  res.json({ accounts: paginated, total, page, totalPages });
+  res.json({ accounts: paginated, total, page, totalPages, source: usedBigQuery ? 'BigQuery' : 'MockData' });
 });
 
-app.get('/api/accounts/:id/graph', (req, res) => {
+// ----------------------------------------------------
+// 2. Graph Nodes (Dual-Source)
+// ----------------------------------------------------
+app.get('/api/accounts/:id/graph', async (req, res) => {
   const accountId = req.params.id;
-  const graphLayer = db.graphMap[accountId];
+  let graphLayer = null;
+  let usedBigQuery = false;
+
+  if (process.env.USE_BIGQUERY === 'true' && bqReady) {
+    try {
+      graphLayer = await bqQueries.getAccountGraph(accountId);
+      usedBigQuery = true;
+      console.log(`[Graph] Fetched nodes for ${accountId} from BigQuery.`);
+    } catch (err) {
+      console.error(`[Graph] ⚠️ BigQuery fallback triggered for ${accountId}:`, err.message);
+    }
+  }
+
+  if (!usedBigQuery) {
+    graphLayer = db.graphMap[accountId];
+  }
+
   if (graphLayer) res.json(graphLayer);
   else res.json({ nodes: [{ id: accountId, label: 'Account', properties: { name: `Unknown (${accountId})` } }], links: [] });
 });
 
-// AI Insights Router (LIVE LLM Integration)
+// ----------------------------------------------------
+// 3. AI Insights (Dual-Source Context)
+// ----------------------------------------------------
 app.get('/api/accounts/:id/insights', async (req, res) => {
   const accountId = req.params.id;
-  const acc = db.accounts.find(a => a.id === accountId);
-  const graph = db.graphMap[accountId];
   
-  if (!acc) return res.status(404).json({ error: "Account not found" });
+  let accName = `Account ${accountId}`;
+  let score = 85;
+  let nodes = [];
+  let usedBigQuery = false;
 
-  const score = acc.health_score;
+  // Extract Context from BigQuery if enabled
+  if (process.env.USE_BIGQUERY === 'true' && bqReady) {
+    try {
+      const graphData = await bqQueries.getAccountGraph(accountId);
+      nodes = graphData.nodes;
+      const accNode = nodes.find(n => n.label === 'Account');
+      if (accNode) accName = accNode.properties.name;
+      
+      // Calculate dynamic score from BQ signals
+      score = calculateHealthScore(nodes);
+      usedBigQuery = true;
+      console.log(`[Insights] Generating insights using BigQuery context for ${accountId}.`);
+    } catch (err) {
+      console.error(`[Insights] ⚠️ BigQuery fallback triggered for ${accountId}:`, err.message);
+    }
+  }
+
+  // Fallback Context
+  if (!usedBigQuery) {
+    const acc = db.accounts.find(a => a.id === accountId);
+    if (!acc) return res.status(404).json({ error: "Account not found" });
+    accName = acc.name;
+    score = acc.health_score;
+    const graph = db.graphMap[accountId];
+    nodes = graph ? graph.nodes : [];
+  }
+
   const isCritical = score < 50;
-  const nodes = graph ? graph.nodes : [];
 
   // ==========================================
-  // 1. Attempt Live OpenAI Generation
+  // Attempt Live AI Generation via Groq
   // ==========================================
   try {
-    // We pass the exact node array structure as context to the AI
     const systemPrompt = `You are an expert RealPage Customer Success AI. Analyze the following property management company graph data.
     The user will provide a JSON array representing active nodes attached to this company.
     Node types you will see and their meaning:
@@ -127,7 +196,7 @@ app.get('/api/accounts/:id/insights', async (req, res) => {
     const userMessage = `Analyze this graph node context: ${JSON.stringify(nodes.map(n => n.properties))}`;
 
     const completion = await openai.chat.completions.create({
-      model: "llama-3.3-70b-versatile", // Groq current recommended model — free & fast
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage }
@@ -136,22 +205,20 @@ app.get('/api/accounts/:id/insights', async (req, res) => {
     });
 
     const aiResponse = JSON.parse(completion.choices[0].message.content);
-    // Overwrite the deterministic score just in case AI hallucinates a different one
     aiResponse.risk_score = score;
-    // Enrich with Account Plan data (always derived deterministically from graph)
     aiResponse.account_plan = buildAccountPlan(nodes);
     return res.json(aiResponse);
 
   } catch (error) {
     // ==========================================
-    // 2. The Hacker-Proof Algorithmic Fallback
+    // The Hacker-Proof Algorithmic Fallback
     // ==========================================
     console.error("Groq Fallback Triggered! (Rate limit, Timeout, or Missing Key)", error.message);
     
     const p1Tickets = nodes.filter(n => n.label === 'Ticket' && n.properties.severity === 'P1').length;
     const billingIssues = nodes.filter(n => n.label === 'BillingIssue').length;
     const openHealthEvents = nodes.filter(n => n.label === 'HealthEvent' && n.properties.status === 'Open').length;
-    const openPME = nodes.filter(n => n.label === 'PME' && n.properties.status === 'Open').length;
+    const openPME = nodes.filter(n => n.label === 'PME' && (n.properties.status === 'Open' || n.properties.status === 'New')).length;
     const cancellations = nodes.filter(n => n.label === 'Cancellation').length;
     const accountPlanNode = nodes.find(n => n.label === 'AccountPlan');
     const isNonCore = accountPlanNode?.properties?.classification === 'Non-Core';
@@ -171,8 +238,8 @@ app.get('/api/accounts/:id/insights', async (req, res) => {
       risk_band: isCritical ? (score < 25 ? 'Critical Risk' : 'High Risk') : (score > 75 ? 'Healthy' : 'Stable'),
       top_drivers: drivers,
       summary_text: isCritical 
-        ? `Analysis of the interaction graph for ${acc.name} indicates structural friction. The clustering of ${nodes.length} active incidents suggests a high probability of churn if not addressed immediately.`
-        : `The knowledge graph for ${acc.name} shows a stable footprint. Current engagement patterns align with healthy enterprise benchmarks with no critical blockers detected.`,
+        ? `Analysis of the interaction graph for ${accName} indicates structural friction. The clustering of ${nodes.length} active incidents suggests a high probability of churn if not addressed immediately.`
+        : `The knowledge graph for ${accName} shows a stable footprint. Current engagement patterns align with healthy enterprise benchmarks with no critical blockers detected.`,
       recommended_actions: isCritical 
         ? ["Execute immediate 'At-Risk' escalation protocol.", "Schedule emergency stakeholder alignment call.", "Review open PMEs and Health Events in Salesforce."]
         : ["Maintain standard rhythmic engagement.", "Review expansion opportunities in next QBR."],
@@ -187,7 +254,7 @@ function buildAccountPlan(nodes) {
   const openHE = nodes.filter(n => n.label === 'HealthEvent' && n.properties.status === 'Open').length;
   const closedHE = nodes.filter(n => n.label === 'HealthEvent' && n.properties.status === 'Closed').length;
   const hasCancellation = nodes.some(n => n.label === 'Cancellation');
-  const pmeOpen = nodes.filter(n => n.label === 'PME' && n.properties.status === 'Open').length;
+  const pmeOpen = nodes.filter(n => n.label === 'PME' && (n.properties.status === 'Open' || n.properties.status === 'New')).length;
   const meetingNode = nodes.find(n => n.label === 'CustomerMeeting');
   return {
     classification: apNode.properties.classification,

@@ -24,3 +24,8 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# GCP & API credentials — never commit secrets
+backend/GCPKey.json
+GCPKey.json
+access_keys.txt

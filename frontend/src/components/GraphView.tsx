@@ -7,6 +7,7 @@ interface GraphData { nodes: any[]; links: any[]; }
 interface Props {
   accountId: string;
   onNodeClick: (node: any) => void;
+  onGraphLoad?: (data: GraphData) => void;
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -21,12 +22,12 @@ const NODE_COLORS: Record<string, string> = {
   AccountPlan:      '#1D4ED8',  // deep blue  — Core/Non-Core classification
   HealthEvent:      '#9333EA',  // vivid purple — open/closed health events
   RenewalChatter:   '#059669',  // emerald — chatter/emails between CSM & Renewal Specialist
-  Cancellation:     '#DC2626',  // bright red — cancellation history
+  Cancellation:     '#1E293B',  // stark charcoal/black — unique visual for churn/cancellation
   PME:              '#D97706',  // amber — Problem Management Escalations
   CustomerMeeting:  '#2563EB',  // blue — customer meetings & activities
 };
 
-export default function GraphView({ accountId, onNodeClick }: Props) {
+export default function GraphView({ accountId, onNodeClick, onGraphLoad }: Props) {
   const fgRef = useRef<any>(null);
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -43,12 +44,23 @@ export default function GraphView({ accountId, onNodeClick }: Props) {
 
   useEffect(() => {
     axios.get(`http://localhost:8000/api/accounts/${accountId}/graph`)
-      .then(res => setGraphData(res.data))
+      .then(res => {
+        setGraphData(res.data);
+        onGraphLoad?.(res.data);  // lift data to App.tsx for AssociatedIssuesPanel
+      })
       .catch(() => {});
-  }, [accountId]);
+  }, [accountId, onGraphLoad]);
 
   useEffect(() => {
     if (fgRef.current && graphData.nodes.length > 0) {
+      // Dynamic physics: massive graphs need massive repulsion to avoid the 'red blob' effect.
+      const nodeCount = graphData.nodes.length;
+      const repulsion = Math.min(-200, nodeCount * -6); // Up to -1800 for 300 nodes
+      const linkDist = nodeCount > 100 ? 140 : (nodeCount > 50 ? 90 : 65);
+
+      fgRef.current.d3Force('charge').strength(repulsion);
+      fgRef.current.d3Force('link').distance(linkDist);
+      
       setTimeout(() => fgRef.current.zoomToFit(400, 50), 600);
     }
   }, [graphData]);
@@ -57,9 +69,9 @@ export default function GraphView({ accountId, onNodeClick }: Props) {
     const { x, y, label, properties } = node;
     let color = NODE_COLORS[label] || '#999';
 
-    // P1 tickets are deep red
-    if (label === 'Ticket' && properties?.severity === 'P1') color = '#ff2b2b';
-    if (label === 'Ticket' && properties?.severity === 'P2') color = '#ff9500';
+    // P1 tickets are bright neon red to immediately grab attention
+    if (label === 'Ticket' && properties?.severity?.startsWith('P1')) color = '#FF0000';
+    if (label === 'Ticket' && properties?.severity?.startsWith('P2')) color = '#EA580C';
 
     const size = label === 'Account' ? 14 : label === 'Portfolio' ? 11 : label === 'Product' ? 9 : 7;
 

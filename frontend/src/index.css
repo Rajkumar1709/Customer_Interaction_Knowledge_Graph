@@ -63,20 +63,41 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 1.25rem;
-  height: 52px;
+  padding: 0 1rem;
+  height: 58px;         /* slightly taller to house search + chips */
   background: var(--rp-navy);
   color: white;
   border-bottom: 1px solid rgba(255,255,255,0.08);
+  gap: 0.75rem;
 }
 
 .main-content {
   display: grid;
-  grid-template-columns: 280px 1fr 300px;
-  gap: 1rem;
-  padding: 1rem;
+  /* 4 columns: Account Selector | Graph | Issues | Detail */
+  grid-template-columns: 260px 1fr 260px 290px;
+  gap: 0.875rem;
+  padding: 0.875rem;
   overflow: hidden;
 }
+
+/* ── 14-inch laptop (≈1366px) — tighten the side panels ── */
+@media (max-width: 1400px) {
+  .main-content {
+    grid-template-columns: 230px 1fr 240px 270px;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+}
+
+/* ── Smaller / lower-res screens — collapse issues panel ── */
+@media (max-width: 1100px) {
+  .main-content {
+    grid-template-columns: 200px 1fr 220px 250px;
+    gap: 0.625rem;
+    padding: 0.625rem;
+  }
+}
+
 
 /* ── Typography ── */
 h1, h2, h3, h4 { font-weight: 600; }
@@ -146,3 +167,20 @@ input[type="text"]:focus {
   outline: none;
 }
 input[type="checkbox"] { accent-color: var(--rp-blue); }
+
+/* ── Spin animation (used for search loading indicator) ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Shimmer skeleton animation ── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, #E2E8F0 25%, #F1F5F9 50%, #E2E8F0 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 4px;
+}
