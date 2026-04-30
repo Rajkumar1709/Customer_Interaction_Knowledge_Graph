@@ -2,6 +2,17 @@ import { FileText, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 
+// Converts raw dollar amounts like "$1,033,864" → "$1.0M" anywhere in a string
+function formatMillions(text: string): string {
+  if (typeof text !== 'string') return text;
+  return text.replace(/\$[\d,]+(?:\.\d+)?/g, (match) => {
+    const num = parseFloat(match.replace(/[$,]/g, ''));
+    if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(1)}M`;
+    if (num >= 1_000)     return `$${(num / 1_000).toFixed(1)}K`;
+    return match;
+  });
+}
+
 export default function AccountSummaryHeader({ intelligence }: { intelligence: any }) {
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -31,7 +42,7 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
         </div>
       );
     }
-    return String(val);
+    return String(formatMillions(String(val)));
   };
 
   return (
@@ -71,7 +82,7 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
                   fontWeight: 400,
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}>
-                  How health score is basically calculated: 65% Business Impact (Tickets, Escalations, Cancellations) and 35% Interaction Sentiment.
+                  Health Score is calculated: 65% Business impact (tickets, escalations, cancellations) and 35% Interaction sentiment.
                 </div>
               )}
             </div>
@@ -136,7 +147,7 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
         </div>
         <div style={{ margin: 0, fontSize: '1rem', lineHeight: 1.6, color: '#334155' }}>
           {typeof briefing === 'string' ? (
-            <p style={{ margin: 0 }}>{briefing}</p>
+            <p style={{ margin: 0 }}>{formatMillions(briefing)}</p>
           ) : typeof briefing === 'object' && briefing !== null ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {Object.entries(briefing).map(([key, value]) => (

@@ -10,9 +10,12 @@ const fmt = (dateVal) => {
  * Searches for accounts in the SFDC_Accounts BigQuery table.
  * Fetches rich account-level fields for the search result list.
  */
-async function searchAccounts(searchTerm, limit = 15, filters = {}) {
-  const sql = `
-    SELECT 
+async function searchAccounts(searchTerm, limit = 150, filters = {}) {
+  const coreFilter    = filters.core    ? `AND a.Core__c = true`  : '';
+  const nonCoreFilter = filters.nonCore ? `AND a.Core__c = false` : '';
+  const nameFilter    = `(LOWER(a.Name) LIKE LOWER(@searchTerm) OR LOWER(a.Id) LIKE LOWER(@searchTerm))`;
+
+  const subFields = `
       a.Id as id,
       a.Name as name,
       (SELECT COUNT(Id) FROM ${T('SFDC_Case')} c WHERE c.AccountId = a.Id AND c.Status NOT LIKE '%Closed%' AND c.Status NOT LIKE '%Resolved%' AND c.Status NOT LIKE '%Completed%' AND c.Priority LIKE 'P1%') as p1_cases,
@@ -21,19 +24,43 @@ async function searchAccounts(searchTerm, limit = 15, filters = {}) {
       (SELECT COUNT(Id) FROM ${T('SFDC_ProblemManagementEscalation')} p WHERE p.PW_Account_Name__c = a.Id AND p.Escalation_Status__c IN ('Open', 'New')) as open_pmes,
       (SELECT COUNT(Id) FROM ${T('SFDC_Cancellation')} canc WHERE canc.PMC__c = a.Id) as cancellations,
       (SELECT COUNT(Id) FROM ${T('SFDC_Order__c')} ord WHERE ord.PMC__c = a.Id AND ord.Phase__c = 'Stalled') as stalled_impl,
-      IF(a.Core__c = false, 1, 0) as is_non_core
-    FROM ${T('SFDC_Accounts')} a
-    WHERE (LOWER(a.Name) LIKE LOWER(@searchTerm) OR LOWER(a.Id) LIKE LOWER(@searchTerm))
-    ${filters.renewal ? `AND EXISTS (SELECT 1 FROM ${T('SFDC_Opportunity')} o WHERE o.AccountId = a.Id AND o.StageName LIKE '%Renewal%')` : ''}
-    ${filters.implementation ? `AND EXISTS (SELECT 1 FROM ${T('SFDC_Order__c')} ord WHERE ord.PMC__c = a.Id AND ord.Implementation_Completion_Date__c IS NULL)` : ''}
-    ORDER BY open_pmes DESC, open_health_events DESC, p1_cases DESC
-    LIMIT @limit
+      IF(a.Core__c = false, 1, 0) as is_non_core`;
+
+  const sql = `
+    SELECT * FROM (
+      -- Top 140 highest-risk accounts
+      SELECT ${subFields}
+      FROM ${T('SFDC_Accounts')} a
+      WHERE ${nameFilter} ${coreFilter} ${nonCoreFilter}
+      ORDER BY open_pmes DESC, open_health_events DESC, p1_cases DESC
+      LIMIT 140
+    )
+    UNION ALL
+    SELECT * FROM (
+      -- Always include at least 10 low-risk accounts (no active issues)
+      SELECT ${subFields}
+      FROM ${T('SFDC_Accounts')} a
+      WHERE ${nameFilter} ${coreFilter} ${nonCoreFilter}
+        AND NOT EXISTS (SELECT 1 FROM ${T('SFDC_Case')} c WHERE c.AccountId = a.Id AND c.Status NOT LIKE '%Closed%' AND c.Priority LIKE 'P1%')
+        AND NOT EXISTS (SELECT 1 FROM ${T('SFDC_ClientHealthEvents__c')} h WHERE h.Accounts__c = a.Id AND h.Status__c = 'Open')
+        AND NOT EXISTS (SELECT 1 FROM ${T('SFDC_ProblemManagementEscalation')} p WHERE p.PW_Account_Name__c = a.Id AND p.Escalation_Status__c IN ('Open', 'New'))
+      LIMIT 10
+    )
   `;
-  const rows = await query(sql, { searchTerm: `%${searchTerm}%`, limit });
+
+  const rows = await query(sql, { searchTerm: `%${searchTerm}%` });
   return rows.map(r => ({
     id: r.id,
     name: r.name,
-    health_score: Math.max(0, 100 - (r.p1_cases * 15) - (r.p2_cases * 8) - (r.open_health_events * 10) - (r.open_pmes * 12) - (r.stalled_impl * 10) - (r.cancellations > 0 ? 20 : 0) - (r.is_non_core * 10))
+    health_score: Math.max(0, 100
+      - (Number(r.p1_cases) * 15)
+      - (Number(r.p2_cases) * 8)
+      - (Number(r.open_health_events) * 10)
+      - (Number(r.open_pmes) * 12)
+      - (Number(r.stalled_impl) * 10)
+      - (Number(r.cancellations) > 0 ? 20 : 0)
+      - (Number(r.is_non_core) * 10)
+    )
   }));
 }
 

@@ -2,16 +2,15 @@ import { useState, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import RiskPanel from './components/RiskPanel';
 import TopNavSearch from './components/TopNavSearch';
-import AssociatedIssuesPanel from './components/AssociatedIssuesPanel';
 import SplashScreen from './components/SplashScreen';
 import AccountDashboard from './components/AccountDashboard';
-import { Network, RotateCcw } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import './index.css';
 
 interface Filters {
   risky: boolean;
-  renewal: boolean;
-  implementation: boolean;
+  core: boolean;
+  nonCore: boolean;
 }
 
 function App() {
@@ -20,7 +19,7 @@ function App() {
   const [selectedGroupNode, setSelectedGroupNode] = useState<any>(null);
   const [, setSelectedIssue] = useState<any>(null);
   const [showSplash, setShowSplash] = useState(true);
-  const [filters, setFilters]                     = useState<Filters>({ risky: false, renewal: false, implementation: false });
+  const [filters, setFilters] = useState<Filters>({ risky: false, core: false, nonCore: false });
 
   // ── Node click in the graph ─────────────────────────────────────────────────
   const handleNodeClick = useCallback((node: any) => {
@@ -36,10 +35,7 @@ function App() {
     }
   }, []);
 
-  // ── Issue card clicked in AssociatedIssuesPanel ─────────────────────────────
-  const handleIssueClick = useCallback((issue: any) => {
-    setSelectedIssue(issue);
-  }, []);
+
 
   // ── CSM Dashboard button / NodeDetailPanel close → back to account overview ──
   const handleReset = useCallback(() => {
@@ -123,10 +119,10 @@ function App() {
         {/* ═══════════════════════════════════════════════════════
             MAIN CONTENT AREA
         ═══════════════════════════════════════════════════════ */}
-        <main className="main-content" style={selectedAccountId ? { display: 'flex', gap: '0.875rem' } : {}}>
+        <main className="main-content" style={{ display: 'flex', gap: '0.875rem' }}>
 
           {/* Col 1: Risk Panel (Always visible) */}
-          <aside className="glass-panel" style={selectedAccountId ? { width: '280px', flexShrink: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' } : { overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <aside className="glass-panel" style={{ width: selectedAccountId ? '280px' : '240px', flexShrink: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <RiskPanel
               filters={filters}
               selectedAccountId={selectedAccountId}
@@ -145,62 +141,65 @@ function App() {
               />
             </section>
           ) : (
-            /* Original Empty State Columns */
-            <>
-              {/* Col 2: Network Explorer */}
-              <section className="glass-panel" style={{ position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--glass-border)', background: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Network size={15} style={{ color: 'var(--rp-blue)' }} />
-                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--rp-blue)' }}>
-                    Network Explorer
-                  </span>
-                </div>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '2rem', textAlign: 'center', background: '#F8FAFC' }}>
-                  <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
-                    <circle cx="36" cy="14" r="8" fill="#BFDBFE" stroke="#93C5FD" strokeWidth="2"/>
-                    <circle cx="14" cy="54" r="8" fill="#BFDBFE" stroke="#93C5FD" strokeWidth="2"/>
-                    <circle cx="58" cy="54" r="8" fill="#BFDBFE" stroke="#93C5FD" strokeWidth="2"/>
-                    <line x1="36" y1="22" x2="14" y2="46" stroke="#BFDBFE" strokeWidth="2" strokeDasharray="4 3"/>
-                    <line x1="36" y1="22" x2="58" y2="46" stroke="#BFDBFE" strokeWidth="2" strokeDasharray="4 3"/>
-                    <line x1="22" y1="54" x2="50" y2="54" stroke="#BFDBFE" strokeWidth="2" strokeDasharray="4 3"/>
-                    <circle cx="36" cy="14" r="4" fill="#3B82F6"/>
-                    <circle cx="14" cy="54" r="4" fill="#60A5FA"/>
-                    <circle cx="58" cy="54" r="4" fill="#60A5FA"/>
-                  </svg>
-                  <div>
-                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#1E293B', marginBottom: '0.4rem' }}>No Account Selected</div>
-                    <div style={{ fontSize: '0.82rem', color: '#64748B', maxWidth: '280px', lineHeight: 1.7 }}>
-                      Choose a PMC from the <strong style={{ color: '#0078D4' }}>Risk-Prioritized PMCs</strong> panel on the left to explore its customer interaction knowledge graph.
-                    </div>
-                  </div>
-                </div>
-              </section>
+          /* Full-width PMC selection welcome screen */
+          <section style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #EFF6FF 0%, #F8FAFC 50%, #F0FDF4 100%)', borderRadius: '16px', border: '1px solid #E2E8F0', overflow: 'hidden', position: 'relative' }}>
 
-              {/* Col 3: Associated Issues */}
-              <aside className="glass-panel" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                <AssociatedIssuesPanel
-                  selectedGroupNode={selectedGroupNode}
-                  onIssueClick={handleIssueClick}
-                />
-              </aside>
+            {/* Background decorative circles */}
+            <div style={{ position: 'absolute', top: '-80px', right: '-80px', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle, #BFDBFE44, transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', bottom: '-60px', left: '-60px', width: '260px', height: '260px', borderRadius: '50%', background: 'radial-gradient(circle, #BBF7D044, transparent 70%)', pointerEvents: 'none' }} />
 
-              {/* Col 4: AI Insight */}
-              <aside className="glass-panel" style={{ padding: '1.25rem', overflowY: 'auto' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', height: '100%', minHeight: '300px', textAlign: 'center', padding: '1.5rem' }}>
-                  <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
-                    <rect x="4" y="4" width="48" height="48" rx="14" fill="#EFF6FF" stroke="#BFDBFE" strokeWidth="2"/>
-                    <path d="M28 14 L40 20 L40 30 C40 37 28 43 28 43 C28 43 16 37 16 30 L16 20 Z" fill="#BFDBFE" stroke="#93C5FD" strokeWidth="1.5"/>
-                    <circle cx="28" cy="28" r="5" fill="#3B82F6"/>
-                  </svg>
-                  <div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1E293B', marginBottom: '0.4rem' }}>AI Insights Ready</div>
-                    <div style={{ fontSize: '0.8rem', color: '#64748B', maxWidth: '190px', lineHeight: 1.7 }}>
-                      Select a <strong style={{ color: '#0078D4' }}>PMC</strong> to load AI-generated health scores, risk drivers, and recommended actions.
-                    </div>
-                  </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem', padding: '3rem 2rem', textAlign: 'center', maxWidth: '680px', position: 'relative', zIndex: 1 }}>
+
+              {/* Animated graph SVG */}
+              <div style={{ position: 'relative' }}>
+                <svg width="140" height="140" viewBox="0 0 140 140" fill="none">
+                  <circle cx="70" cy="28" r="18" fill="#BFDBFE" stroke="#93C5FD" strokeWidth="2"/>
+                  <circle cx="28" cy="105" r="18" fill="#BFDBFE" stroke="#93C5FD" strokeWidth="2"/>
+                  <circle cx="112" cy="105" r="18" fill="#BFDBFE" stroke="#93C5FD" strokeWidth="2"/>
+                  <line x1="70" y1="46" x2="28" y2="87" stroke="#93C5FD" strokeWidth="2" strokeDasharray="6 4"/>
+                  <line x1="70" y1="46" x2="112" y2="87" stroke="#93C5FD" strokeWidth="2" strokeDasharray="6 4"/>
+                  <line x1="46" y1="105" x2="94" y2="105" stroke="#93C5FD" strokeWidth="2" strokeDasharray="6 4"/>
+                  <circle cx="70" cy="28" r="9" fill="#3B82F6"/>
+                  <circle cx="28" cy="105" r="9" fill="#60A5FA"/>
+                  <circle cx="112" cy="105" r="9" fill="#60A5FA"/>
+                </svg>
+                <style>{`@keyframes pulse-dot { 0%,100% { transform: scale(1); opacity:1; } 50% { transform: scale(1.3); opacity:0.7; } } svg circle:last-child, svg circle:nth-last-child(2), svg circle:nth-last-child(3) { animation: pulse-dot 2s ease-in-out infinite; }`}</style>
+              </div>
+
+              {/* Title */}
+              <div>
+                <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0F172A', lineHeight: 1.15, marginBottom: '0.5rem' }}>
+                  Customer Interaction
+                  <br />
+                  <span style={{ background: 'linear-gradient(90deg, #0078D4, #7C3AED)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Knowledge Graph</span>
                 </div>
-              </aside>
-            </>
+                <div style={{ fontSize: '1.05rem', color: '#64748B', lineHeight: 1.7, maxWidth: '520px', margin: '0 auto' }}>
+                  Select a PMC from the <strong style={{ color: '#0078D4' }}>Risk-Prioritized PMCs</strong> panel on the left to load its complete account intelligence — AI briefings, health scores, and actionable insights.
+                </div>
+              </div>
+
+              {/* Feature cards grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', width: '100%', maxWidth: '580px' }}>
+                {[
+                  { icon: '🏥', text: 'Health Score Breakdown', color: '#EFF6FF', border: '#BFDBFE', textColor: '#1D4ED8' },
+                  { icon: '🤖', text: 'AI Executive Briefing', color: '#FDF4FF', border: '#E9D5FF', textColor: '#7C3AED' },
+                  { icon: '⚡', text: 'Next Best Actions', color: '#FFFBEB', border: '#FDE68A', textColor: '#92400E' },
+                  { icon: '🕸️', text: 'Knowledge Graph', color: '#F0FDF4', border: '#BBF7D0', textColor: '#14532D' },
+                  { icon: '📋', text: 'Role-Based Intel', color: '#FFF7ED', border: '#FED7AA', textColor: '#9A3412' },
+                  { icon: '📅', text: 'Active Timeline', color: '#F0F9FF', border: '#BAE6FD', textColor: '#075985' },
+                ].map(f => (
+                  <div key={f.text} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', background: f.color, border: `1px solid ${f.border}`, borderRadius: '12px', padding: '0.85rem 0.5rem', fontSize: '0.78rem', fontWeight: 700, color: f.textColor }}>
+                    <span style={{ fontSize: '1.4rem' }}>{f.icon}</span>
+                    {f.text}
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ fontSize: '0.8rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                💡 Use the <strong style={{ color: '#64748B' }}>search bar</strong> above or click any account on the left to get started
+              </div>
+            </div>
+          </section>
           )}
 
         </main>

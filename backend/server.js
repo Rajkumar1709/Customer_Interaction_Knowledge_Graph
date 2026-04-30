@@ -63,10 +63,10 @@ try {
 app.get('/api/accounts/search', async (req, res) => {
   const query = (req.query.q || '').toLowerCase();
   const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 15;
+  const limit = parseInt(req.query.limit) || 150;
   const risky = req.query.risky === 'true';
-  const renewal = req.query.renewal === 'true';
-  const implementation = req.query.implementation === 'true';
+  const core = req.query.core === 'true';
+  const nonCore = req.query.nonCore === 'true';
 
   let results = [];
   let usedBigQuery = false;
@@ -74,7 +74,7 @@ app.get('/api/accounts/search', async (req, res) => {
   // Attempt BigQuery First
   if (process.env.USE_BIGQUERY === 'true' && bqReady) {
     try {
-      results = await bqQueries.searchAccounts(query, limit * page, { risky, renewal, implementation });
+      results = await bqQueries.searchAccounts(query, limit * page, { risky, core, nonCore });
       usedBigQuery = true;
       console.log(`[Search] Fetched from BigQuery. Query: "${query}"`);
     } catch (err) {
@@ -97,21 +97,19 @@ app.get('/api/accounts/search', async (req, res) => {
     results = results.filter(acc => acc.health_score < 50);
   }
 
-  // Filter: Renewal < 90 Days (Only runs on mock data; BigQuery handles this natively via SQL EXISTS clause)
-  if (renewal && !usedBigQuery) {
+  // Filter: Core Accounts (mock data fallback)
+  if (core && !usedBigQuery) {
     results = results.filter(acc => {
       const graph = db.graphMap[acc.id];
-      if (!graph) return false;
-      return graph.nodes.some(n => n.label === 'Renewal' && n.properties.days_to_renewal < 90);
+      return graph?.nodes?.some(n => n.label === 'Account' && n.properties.is_core === true);
     });
   }
 
-  // Filter: Stalled Implementation (Only runs on mock data; BigQuery handles this natively via SQL EXISTS clause)
-  if (implementation && !usedBigQuery) {
+  // Filter: Non-Core Accounts (mock data fallback)
+  if (nonCore && !usedBigQuery) {
     results = results.filter(acc => {
       const graph = db.graphMap[acc.id];
-      if (!graph) return false;
-      return graph.nodes.some(n => n.label === 'Implementation' && n.properties.phase === 'Stalled');
+      return graph?.nodes?.some(n => n.label === 'Account' && n.properties.is_core === false);
     });
   }
 

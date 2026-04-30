@@ -11,8 +11,8 @@ interface AccountSummary {
 
 interface Filters {
   risky: boolean;
-  renewal: boolean;
-  implementation: boolean;
+  core: boolean;
+  nonCore: boolean;
 }
 
 interface Props {
@@ -28,9 +28,9 @@ function trafficDot(score: number) {
 }
 
 const CHIPS = [
-  { key: 'risky',          emoji: '🔴', label: 'Risky Accounts' },
-  { key: 'renewal',        emoji: '🔄', label: 'Renewal < 90d' },
-  { key: 'implementation', emoji: '⚙️',  label: 'Stalled Impl.' },
+  { key: 'risky',   emoji: '🔴', label: 'Risky Accounts' },
+  { key: 'core',    emoji: '✅', label: 'Core Accounts'  },
+  { key: 'nonCore', emoji: '⚠️',  label: 'Non-Core'       },
 ] as const;
 
 export default function TopNavSearch({ filters, onFiltersChange, onSelect }: Props) {

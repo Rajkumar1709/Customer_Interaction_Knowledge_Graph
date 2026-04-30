@@ -13,8 +13,8 @@ interface AccountSummary {
 
 interface Filters {
   risky: boolean;
-  renewal: boolean;
-  implementation: boolean;
+  core: boolean;
+  nonCore: boolean;
 }
 
 interface Props {
@@ -60,10 +60,10 @@ export default function RiskPanel({ filters, selectedAccountId, onSelect }: Prop
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: '100', page: '1' });
-      if (filters.risky)          params.set('risky', 'true');
-      if (filters.renewal)        params.set('renewal', 'true');
-      if (filters.implementation) params.set('implementation', 'true');
+      const params = new URLSearchParams({ limit: '150', page: '1' });
+      if (filters.risky)   params.set('risky', 'true');
+      if (filters.core)    params.set('core', 'true');
+      if (filters.nonCore) params.set('nonCore', 'true');
 
       const res = await axios.get(`/api/accounts/search?${params}`);
       const sorted: AccountSummary[] = (res.data.accounts || [])
@@ -134,9 +134,9 @@ export default function RiskPanel({ filters, selectedAccountId, onSelect }: Prop
           )}
         </div>
 
-        {/* Clickable band filter pills */}
+        {/* Clickable band filter tiles */}
         {!loading && (
-          <div style={{ display: 'flex', gap: '0.4rem' }}>
+          <div style={{ display: 'flex', gap: '0.6rem', width: '100%', marginTop: '0.25rem' }}>
             {([
               { band: 'high' as Band, label: `${highCount} High`, color: '#DC2626', bg: '#FEF2F2', border: '#FCA5A5', activeBg: '#DC2626' },
               { band: 'mod'  as Band, label: `${modCount} Mod`,   color: '#D97706', bg: '#FFFBEB', border: '#FDE68A', activeBg: '#D97706' },
@@ -147,25 +147,34 @@ export default function RiskPanel({ filters, selectedAccountId, onSelect }: Prop
                 <motion.button
                   key={b.band}
                   onClick={() => toggleBand(b.band)}
-                  whileHover={{ scale: 1.06 }}
-                  whileTap={{ scale: 0.94 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   title={isActive ? `Remove ${b.band} filter` : `Show only ${b.band}-risk accounts`}
                   style={{
-                    fontSize: '0.65rem',
-                    fontWeight: 700,
-                    padding: '0.2rem 0.5rem',
-                    borderRadius: '8px',
+                    fontSize: '0.9rem',
+                    fontWeight: 900,
+                    padding: '0.8rem 0.4rem',
+                    borderRadius: '12px',
                     cursor: 'pointer',
                     fontFamily: 'Inter, sans-serif',
-                    transition: 'all 0.18s',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                    flex: '1 1 0',
+                    minWidth: 0,
+                    textAlign: 'center',
                     // Active: filled with band color; Inactive: tinted background
                     color:      isActive ? 'white'    : b.color,
                     background: isActive ? b.activeBg : b.bg,
-                    border:     isActive ? `1px solid ${b.activeBg}` : `1px solid ${b.border}`,
-                    boxShadow:  isActive ? `0 0 0 2px ${b.color}40` : 'none',
+                    border:     `2px solid ${isActive ? b.activeBg : b.border}`,
+                    boxShadow:  isActive ? `0 4px 6px -1px ${b.color}40` : '0 1px 2px rgba(0,0,0,0.05)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    lineHeight: 1.2,
                   }}
                 >
-                  {b.label}
+                  <span style={{ fontSize: '1.1rem', marginBottom: '0.1rem' }}>{b.label.split(' ')[0]}</span>
+                  <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>{b.label.split(' ')[1]}</span>
                 </motion.button>
               );
             })}
