@@ -109,7 +109,7 @@ Your goal is to generate a comprehensive, judge-ready JSON response with the fol
    - "title": A short string (e.g. "Rising Support Activity").
    - "type": "Risk" or "Opportunity" or "Observation".
    - "explanation": Plain-English explanation.
-   - "evidence": Array of 1-3 strings explicitly citing graph data (e.g. "3 P1 tickets created in last 14 days").
+   - "evidence": Array of 1-3 strings explicitly citing graph data (e.g. "3 P1 tickets created in last 14 days"). IMPORTANT: When citing ACV or revenue risk, ALWAYS calculate and express it as a "% of Total ARR" based on the AccountPlan ARR, rather than just raw dollar amounts.
    - "confidence": "High", "Medium", or "Low".
 3. "role_summaries": Targeted 1-2 sentence summaries tailored for specific roles. Must include keys:
    - "sales": Focus on whitespace, expansion, or renewal risk.

@@ -5,7 +5,7 @@ import AccountSummaryHeader from './AccountSummaryHeader';
 import TimelineBuilder from './TimelineBuilder';
 import ExplainableInsights from './ExplainableInsights';
 import RoleSummaryTabs from './RoleSummaryTabs';
-import AccountQAService from './AccountQAService';
+
 import GraphView, { NODE_COLORS } from './GraphView';
 import DataGroundedInsightPanel from './DataGroundedInsightPanel';
 
@@ -120,9 +120,6 @@ export default function AccountDashboard({ accountId, onNodeClick, onGraphLoad, 
           </div>
         </div>
       </div>
-
-      {/* Floating Q&A Widget */}
-      <AccountQAService accountId={accountId} />
     </div>
   );
 }

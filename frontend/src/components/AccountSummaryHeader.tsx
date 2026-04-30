@@ -19,7 +19,12 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
   if (!intelligence) return null;
 
   const { account_plan, briefing, risk_score, risk_band } = intelligence;
-  const isCritical = risk_score < 50;
+  let themeConfig = { bg: '#F0FDF4', border: '#16A34A', text: '#16A34A', darkText: '#14532D' }; // Healthy
+  if (risk_score < 50) {
+    themeConfig = { bg: '#FEF2F2', border: '#DC2626', text: '#DC2626', darkText: '#991B1B' }; // Critical
+  } else if (risk_score < 75) {
+    themeConfig = { bg: '#FFFBEB', border: '#D97706', text: '#D97706', darkText: '#92400E' }; // Moderate / Stable
+  }
 
   // Helper function to gracefully format nested objects
   const renderValue = (val: any): React.ReactNode => {
@@ -52,9 +57,9 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
         <motion.div 
           whileHover={{ scale: 1.02 }}
-          style={{ position: 'relative', flex: '0 0 auto', padding: '1.5rem', background: isCritical ? '#FEF2F2' : '#F0FDF4', borderRadius: '12px', border: `2px solid ${isCritical ? '#DC2626' : '#16A34A'}`, minWidth: '150px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+          style={{ position: 'relative', flex: '0 0 auto', padding: '1.5rem', background: themeConfig.bg, borderRadius: '12px', border: `2px solid ${themeConfig.border}`, minWidth: '150px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 600, color: isCritical ? '#DC2626' : '#16A34A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 600, color: themeConfig.text, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Health Score
             <div 
               onMouseEnter={() => setShowTooltip(true)} 
@@ -87,8 +92,8 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
               )}
             </div>
           </div>
-          <div style={{ fontSize: '3.5rem', fontWeight: 800, lineHeight: 1, color: isCritical ? '#DC2626' : '#16A34A', margin: '0.5rem 0' }}>{risk_score}</div>
-          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: isCritical ? '#991B1B' : '#14532D' }}>{risk_band}</div>
+          <div style={{ fontSize: '3.5rem', fontWeight: 800, lineHeight: 1, color: themeConfig.text, margin: '0.5rem 0' }}>{risk_score}</div>
+          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: themeConfig.darkText }}>{risk_band}</div>
         </motion.div>
 
         {account_plan && (
@@ -112,17 +117,23 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
                 <div style={{ fontSize: '0.75rem', color: '#64748B', marginBottom: '0.2rem' }}>Secondary Solution</div>
                 <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0F172A', wordBreak: 'break-word' }}>{account_plan.secondary_solution || 'None'}</div>
               </div>
-              <div style={{ flex: '1 1 120px' }}>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', marginBottom: '0.2rem' }}>Last Meeting</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0F172A', wordBreak: 'break-word' }}>{account_plan.last_meeting || 'No recent meetings'}</div>
-              </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: 'auto' }}>
-              {account_plan.health_events_open > 0 && <span className="kpi-pill warning">🏥 {account_plan.health_events_open} Open Health Event{account_plan.health_events_open > 1 ? 's' : ''}</span>}
-              {account_plan.pme_open > 0 && <span className="kpi-pill critical">🚨 {account_plan.pme_open} Open PME</span>}
-              {account_plan.has_cancellation && <span className="kpi-pill critical">⚠️ Cancellation Recorded</span>}
-            </div>
+            {/* Products Used */}
+            {account_plan.products && account_plan.products.length > 0 && (
+              <div style={{ marginTop: '0.75rem' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.4rem' }}>Products Used</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {account_plan.products.map((p: string, i: number) => (
+                    <span key={i} style={{ fontSize: '0.75rem', fontWeight: 600, padding: '0.2rem 0.65rem', borderRadius: '20px', background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1D4ED8' }}>
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+
 
             {account_plan.score_breakdown && account_plan.score_breakdown.length > 0 && (
               <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>

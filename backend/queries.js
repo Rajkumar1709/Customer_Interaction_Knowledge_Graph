@@ -20,9 +20,10 @@ async function searchAccounts(searchTerm, limit = 150, filters = {}) {
       a.Name as name,
       (SELECT COUNT(Id) FROM ${T('SFDC_Case')} c WHERE c.AccountId = a.Id AND c.Status NOT LIKE '%Closed%' AND c.Status NOT LIKE '%Resolved%' AND c.Status NOT LIKE '%Completed%' AND c.Priority LIKE 'P1%') as p1_cases,
       (SELECT COUNT(Id) FROM ${T('SFDC_Case')} c WHERE c.AccountId = a.Id AND c.Status NOT LIKE '%Closed%' AND c.Status NOT LIKE '%Resolved%' AND c.Status NOT LIKE '%Completed%' AND c.Priority LIKE 'P2%') as p2_cases,
+      (SELECT COUNT(Id) FROM ${T('SFDC_Case')} c WHERE c.AccountId = a.Id AND c.Status NOT LIKE '%Closed%' AND c.Status NOT LIKE '%Resolved%' AND c.Status NOT LIKE '%Completed%' AND c.Priority LIKE 'P3%') as p3_cases,
       (SELECT COUNT(Id) FROM ${T('SFDC_ClientHealthEvents__c')} h WHERE h.Accounts__c = a.Id AND h.Status__c = 'Open') as open_health_events,
       (SELECT COUNT(Id) FROM ${T('SFDC_ProblemManagementEscalation')} p WHERE p.PW_Account_Name__c = a.Id AND p.Escalation_Status__c IN ('Open', 'New')) as open_pmes,
-      (SELECT COUNT(Id) FROM ${T('SFDC_Cancellation')} canc WHERE canc.PMC__c = a.Id) as cancellations,
+      (SELECT COUNT(c.Id) FROM ${T('SFDC_Cancellation')} c LEFT JOIN ${T('SFDC_Cancellation_Reason')} r ON c.Reason_for_Cancellation__c = r.ID WHERE c.PMC__c = a.Id AND COALESCE(r.Name, c.Reason_for_Cancellation__c) != 'Site Sold') as cancellations,
       (SELECT COUNT(Id) FROM ${T('SFDC_Order__c')} ord WHERE ord.PMC__c = a.Id AND ord.Phase__c = 'Stalled') as stalled_impl,
       IF(a.Core__c = false, 1, 0) as is_non_core`;
 
@@ -53,14 +54,12 @@ async function searchAccounts(searchTerm, limit = 150, filters = {}) {
     id: r.id,
     name: r.name,
     health_score: Math.max(0, 100
-      - (Number(r.p1_cases) * 15)
-      - (Number(r.p2_cases) * 8)
-      - (Number(r.open_health_events) * 10)
-      - (Number(r.open_pmes) * 12)
-      - (Number(r.stalled_impl) * 10)
-      - (Number(r.cancellations) > 0 ? 20 : 0)
-      - (Number(r.is_non_core) * 10)
-    )
+      - (Number(r.p1_cases) * 5)
+      - (Number(r.p2_cases) * 2)
+      - (Number(r.p3_cases) * 1)
+      - (Number(r.open_health_events) * 5)
+      - (Number(r.cancellations) * 2)
+    ),
   }));
 }
 
@@ -82,9 +81,10 @@ async function getAccountGraph(accountId) {
         a.OMS_Account_ID__c,
         (SELECT COUNT(Id) FROM ${T('SFDC_Case')} c WHERE c.AccountId = a.Id AND c.Status NOT LIKE '%Closed%' AND c.Status NOT LIKE '%Resolved%' AND c.Status NOT LIKE '%Completed%' AND c.Priority LIKE 'P1%') as p1_cases,
         (SELECT COUNT(Id) FROM ${T('SFDC_Case')} c WHERE c.AccountId = a.Id AND c.Status NOT LIKE '%Closed%' AND c.Status NOT LIKE '%Resolved%' AND c.Status NOT LIKE '%Completed%' AND c.Priority LIKE 'P2%') as p2_cases,
+        (SELECT COUNT(Id) FROM ${T('SFDC_Case')} c WHERE c.AccountId = a.Id AND c.Status NOT LIKE '%Closed%' AND c.Status NOT LIKE '%Resolved%' AND c.Status NOT LIKE '%Completed%' AND c.Priority LIKE 'P3%') as p3_cases,
         (SELECT COUNT(Id) FROM ${T('SFDC_ClientHealthEvents__c')} h WHERE h.Accounts__c = a.Id AND h.Status__c = 'Open') as open_health_events,
         (SELECT COUNT(Id) FROM ${T('SFDC_ProblemManagementEscalation')} p WHERE p.PW_Account_Name__c = a.Id AND p.Escalation_Status__c IN ('Open', 'New')) as open_pmes,
-        (SELECT COUNT(Id) FROM ${T('SFDC_Cancellation')} canc WHERE canc.PMC__c = a.Id) as cancellations,
+        (SELECT COUNT(DISTINCT c.Id) FROM ${T('SFDC_Cancellation')} c LEFT JOIN ${T('SFDC_Cancellation_Reason')} r ON c.Reason_for_Cancellation__c = r.ID WHERE c.PMC__c = a.Id AND LOWER(COALESCE(r.Name, c.Reason_for_Cancellation__c)) NOT LIKE '%site sold%') as cancellations,
         (SELECT COUNT(Id) FROM ${T('SFDC_Order__c')} ord WHERE ord.PMC__c = a.Id AND ord.Phase__c = 'Stalled') as stalled_impl,
         IF(a.Core__c = false, 1, 0) as is_non_core
       FROM ${T('SFDC_Accounts')} a WHERE a.Id = @id`, { id: accountId }),
@@ -118,7 +118,7 @@ async function getAccountGraph(accountId) {
         PME_Owner_Name__c, CreatedDate, Due_Date__c,
         Description__c, Summary__c, Issue_Summary__c,
         Business_Impact__c, Customer_Impact__c, Error_Message__c,
-        Functional_Area__c, Support_Product__c,
+        Functional_Area__c, Support_Product__c, Support_Product_Name__c,
         Azure_DevOps_URL__c, Azure_DevOps_ID__c, Azure_DevOps_State__c, Azure_DevOps_Priority__c,
         TFS_ID__c, Recurring_PME__c,
         Resolution_Summary__c, Date_Closed__c,
@@ -178,12 +178,12 @@ async function getAccountGraph(accountId) {
   const acc = data.account[0] || {};
   const p1 = acc.p1_cases || 0;
   const p2 = acc.p2_cases || 0;
+  const p3 = acc.p3_cases || 0;
   const ohe = acc.open_health_events || 0;
   const opme = acc.open_pmes || 0;
   const si = acc.stalled_impl || 0;
   const canc = acc.cancellations || 0;
-  const ncore = acc.is_non_core || 0;
-  const calculatedScore = Math.max(0, 100 - (p1 * 15) - (p2 * 8) - (ohe * 10) - (opme * 12) - (si * 10) - (canc > 0 ? 20 : 0) - (ncore * 10));
+  const calculatedScore = Math.max(0, 100 - (p1 * 5) - (p2 * 2) - (p3 * 1) - (ohe * 5) - (canc * 2));
 
   nodes.push({
     id: accountId,
@@ -198,13 +198,26 @@ async function getAccountGraph(accountId) {
       total_properties: acc.Total_Properties_f__c ? Number(acc.Total_Properties_f__c).toLocaleString() : 'N/A',
       risk_level: acc.Risk_Level__c || 'Unknown',
       core: acc.Core__c === true ? 'Core' : (acc.Core__c === false ? 'Non-Core' : 'N/A'),
-      tier: acc.Account_Tier__c || 'N/A',
+      classification: acc.Core__c === true ? 'Core' : (acc.Core__c === false ? 'Non-Core' : 'N/A'),
+      account_tier: acc.Account_Tier__c || 'N/A',
       territory: acc.Territory__c || 'N/A',
       business_type: acc.Business_Type__c || 'N/A',
+      primary_type: acc.Primary_Type__c || 'N/A',
       primary_solution: acc.Property_Mgmt_Solution_Primary__c || 'N/A',
       secondary_solution: acc.Property_Mgmt_Solution_Secondary__c || 'N/A',
-      location: [acc.BillingCity, acc.BillingState, acc.BillingCountry].filter(Boolean).join(', ') || 'N/A',
-      oms_id: acc.OMS_Account_ID__c || 'N/A'
+      city: acc.BillingCity || 'N/A',
+      state: acc.BillingState || 'N/A',
+      country: acc.BillingCountry || 'N/A',
+      oms_id: acc.OMS_Account_ID__c || 'N/A',
+      
+      // Pass the raw SQL aggregations to ensure perfect sync with score breakdown
+      db_p1: p1,
+      db_p2: p2,
+      db_p3: p3,
+      db_ohe: ohe,
+      db_opme: opme,
+      db_si: si,
+      db_canc: canc
     }
   });
 
@@ -223,7 +236,7 @@ async function getAccountGraph(accountId) {
           case_number:       c.CaseNumber,
           subject:           c.Subject || 'No Subject',
           description:       c.description || 'No description available.',
-          product:           c.Support_Product__c || 'General',
+          product:           c.Area__c || c.Support_Product__c || 'General',
           area:              c.Area__c || 'N/A',
           sub_area:          c.Sub_Area__c || 'N/A',
           reason:            c.Reason || 'N/A',
@@ -291,7 +304,7 @@ async function getAccountGraph(accountId) {
         customer_impact:   p.Customer_Impact__c || 'N/A',
         error_message:     p.Error_Message__c || 'N/A',
         functional_area:   p.Functional_Area__c || 'N/A',
-        product:           p.Support_Product__c || 'N/A',
+        product:           p.Support_Product_Name__c || p.Functional_Area__c || 'N/A',
         recurring:         p.Recurring_PME__c ? '⚠️ Yes — Recurring Issue' : 'No',
         resolution_summary:p.Resolution_Summary__c || 'Not yet resolved.',
         tfs_link:          p.Azure_DevOps_URL__c || '',

@@ -384,36 +384,68 @@ app.post('/api/nodes/analyze', async (req, res) => {
 function buildAccountPlan(nodes) {
   const apNode = nodes.find(n => n.label === 'AccountPlan');
   if (!apNode) return null;
-  const openHE = nodes.filter(n => n.label === 'HealthEvent' && n.properties.status === 'Open').length;
-  const closedHE = nodes.filter(n => n.label === 'HealthEvent' && n.properties.status === 'Closed').length;
-  const cancellations = nodes.filter(n => n.label === 'Cancellation').length;
-  const pmeOpen = nodes.filter(n => n.label === 'PME' && (n.properties.status === 'Open' || n.properties.status === 'New')).length;
-  const meetingNode = nodes.find(n => n.label === 'CustomerMeeting');
+  const accNode = nodes.find(n => n.label === 'Account');
+  if (!accNode) return null;
+
+  // Use the raw Database aggregations passed from the SQL query in queries.js
+  // This guarantees the breakdown math matches the exact calculated score, bypassing node limits (LIMIT 20)
+  const openHE = Number(accNode.properties.db_ohe) || 0;
+  const cancellations = Number(accNode.properties.db_canc) || 0;
+  const pmeOpen = Number(accNode.properties.db_opme) || 0;
+  const stalledImpl = Number(accNode.properties.db_si) || 0;
   
-  const p1Tickets = nodes.filter(n => n.label === 'Ticket' && n.properties.severity && n.properties.severity.startsWith('P1')).length;
-  const p2Tickets = nodes.filter(n => n.label === 'Ticket' && n.properties.severity && n.properties.severity.startsWith('P2')).length;
-  const stalledImpl = nodes.filter(n => n.label === 'Implementation' && n.properties.phase === 'Stalled').length;
-  const isNonCore = apNode.properties.classification === 'Non-Core';
+  const p1Tickets = Number(accNode.properties.db_p1) || 0;
+  const p2Tickets = Number(accNode.properties.db_p2) || 0;
+  const p3Tickets = Number(accNode.properties.db_p3) || 0;
+  
+  const closedHE = nodes.filter(n => n.label === 'HealthEvent' && n.properties.status === 'Closed').length;
+
+  // Build products list: primary + secondary solution + unique support products from tickets
+  const productSet = new Set();
+  
+  const addProduct = (val) => {
+    if (!val || val === 'N/A' || val === 'None' || val === 'General') return;
+    // Skip raw Salesforce IDs (18 chars starting with 'a0' or '01')
+    if (/^[a-zA-Z0-9]{15,18}$/.test(val) && (val.startsWith('a0') || val.startsWith('01'))) return;
+    productSet.add(val);
+  };
+
+  addProduct(apNode.properties.primary_solution);
+  addProduct(apNode.properties.secondary_solution);
+  
+  // Actual PMC products from their Implementations / Orders (Product Family or Product Name)
+  nodes.filter(n => n.label === 'Implementation').forEach(n => {
+    // Prefer the broader Product Family if available, else fallback to Product Name
+    const actualProduct = (n.properties.product_family && n.properties.product_family !== 'N/A') 
+      ? n.properties.product_family 
+      : n.properties.product;
+    addProduct(actualProduct);
+  });
+  
+  const products = [...productSet].slice(0, 8); // cap at 8 tags
 
   const breakdown = [];
   breakdown.push({ factor: 'Base Score', impact: '+100' });
-  if (p1Tickets > 0) breakdown.push({ factor: `${p1Tickets} P1 Ticket(s)`, impact: `-${p1Tickets * 15}` });
-  if (p2Tickets > 0) breakdown.push({ factor: `${p2Tickets} P2 Ticket(s)`, impact: `-${p2Tickets * 8}` });
-  if (openHE > 0) breakdown.push({ factor: `${openHE} Open Health Event(s)`, impact: `-${openHE * 10}` });
-  if (pmeOpen > 0) breakdown.push({ factor: `${pmeOpen} Open PME(s)`, impact: `-${pmeOpen * 12}` });
-  if (stalledImpl > 0) breakdown.push({ factor: `${stalledImpl} Stalled Implementation(s)`, impact: `-${stalledImpl * 10}` });
-  if (cancellations > 0) breakdown.push({ factor: 'Cancellation History', impact: '-20' });
-  if (isNonCore) breakdown.push({ factor: 'Non-Core Account', impact: '-10' });
+  if (p1Tickets > 0) breakdown.push({ factor: `${p1Tickets} P1 Ticket(s)`, impact: `-${p1Tickets * 5}` });
+  if (p2Tickets > 0) breakdown.push({ factor: `${p2Tickets} P2 Ticket(s)`, impact: `-${p2Tickets * 2}` });
+  if (p3Tickets > 0) breakdown.push({ factor: `${p3Tickets} P3 Ticket(s)`, impact: `-${p3Tickets * 1}` });
+  if (openHE > 0) breakdown.push({ factor: `${openHE} Open Health Event(s)`, impact: `-${openHE * 5}` });
+  if (cancellations > 0) breakdown.push({ factor: `${cancellations} Cancellation(s)`, impact: `-${cancellations * 2}` });
+
+  const totalDeductions = (p1Tickets * 5) + (p2Tickets * 2) + (p3Tickets * 1) + (openHE * 5) + (cancellations * 2);
+  if (totalDeductions > 100) {
+    breakdown.push({ factor: 'Score Normalized to Floor', impact: `+${totalDeductions - 100}` });
+  }
 
   return {
     classification: apNode.properties.classification,
     primary_solution: apNode.properties.primary_solution,
     secondary_solution: apNode.properties.secondary_solution,
+    products,
     health_events_open: openHE,
     health_events_closed: closedHE,
     has_cancellation: cancellations > 0,
     pme_open: pmeOpen,
-    last_meeting: meetingNode ? meetingNode.properties.date : null,
     score_breakdown: breakdown
   };
 }
