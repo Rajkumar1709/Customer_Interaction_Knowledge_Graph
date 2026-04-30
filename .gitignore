@@ -9,7 +9,7 @@ backend/.env
 frontend/.env
 
 # Build outputs
-frontend/dist/
+# frontend/dist/ — included in repo for deployment
 frontend/build/
 backend/dist/
 
