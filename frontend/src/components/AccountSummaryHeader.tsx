@@ -1,11 +1,38 @@
-import { FileText } from 'lucide-react';
+import { FileText, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useState } from 'react';
 
 export default function AccountSummaryHeader({ intelligence }: { intelligence: any }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
   if (!intelligence) return null;
 
   const { account_plan, briefing, risk_score, risk_band } = intelligence;
   const isCritical = risk_score < 50;
+
+  // Helper function to gracefully format nested objects
+  const renderValue = (val: any): React.ReactNode => {
+    if (Array.isArray(val)) {
+      return (
+        <ul style={{ margin: '0 0 0.5rem 1.5rem', padding: 0 }}>
+          {val.map((v, i) => (
+            <li key={i} style={{ marginBottom: '0.2rem' }}>{renderValue(v)}</li>
+          ))}
+        </ul>
+      );
+    } else if (typeof val === 'object' && val !== null) {
+      return (
+        <div style={{ margin: '0.25rem 0 0.5rem 0.5rem', paddingLeft: '0.75rem', borderLeft: '2px solid #CBD5E1' }}>
+          {Object.entries(val).map(([k, v]) => (
+            <div key={k} style={{ marginBottom: '0.2rem' }}>
+              <span style={{ fontWeight: 600, color: '#475569', textTransform: 'capitalize' }}>{k.replace(/_/g, ' ')}:</span> {renderValue(v)}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return String(val);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -14,9 +41,41 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
         <motion.div 
           whileHover={{ scale: 1.02 }}
-          style={{ flex: '0 0 auto', padding: '1.5rem', background: isCritical ? '#FEF2F2' : '#F0FDF4', borderRadius: '12px', border: `2px solid ${isCritical ? '#DC2626' : '#16A34A'}`, minWidth: '150px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+          style={{ position: 'relative', flex: '0 0 auto', padding: '1.5rem', background: isCritical ? '#FEF2F2' : '#F0FDF4', borderRadius: '12px', border: `2px solid ${isCritical ? '#DC2626' : '#16A34A'}`, minWidth: '150px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
         >
-          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: isCritical ? '#DC2626' : '#16A34A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Health Score</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 600, color: isCritical ? '#DC2626' : '#16A34A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Health Score
+            <div 
+              onMouseEnter={() => setShowTooltip(true)} 
+              onMouseLeave={() => setShowTooltip(false)}
+              style={{ cursor: 'help', display: 'flex' }}
+            >
+              <Info size={14} />
+              {showTooltip && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  marginTop: '0.5rem',
+                  background: '#1E293B',
+                  color: 'white',
+                  padding: '0.75rem',
+                  borderRadius: '6px',
+                  fontSize: '0.75rem',
+                  width: '220px',
+                  zIndex: 50,
+                  textTransform: 'none',
+                  letterSpacing: 'normal',
+                  lineHeight: 1.4,
+                  fontWeight: 400,
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }}>
+                  How health score is basically calculated: 65% Business Impact (Tickets, Escalations, Cancellations) and 35% Interaction Sentiment.
+                </div>
+              )}
+            </div>
+          </div>
           <div style={{ fontSize: '3.5rem', fontWeight: 800, lineHeight: 1, color: isCritical ? '#DC2626' : '#16A34A', margin: '0.5rem 0' }}>{risk_score}</div>
           <div style={{ fontSize: '0.9rem', fontWeight: 700, color: isCritical ? '#991B1B' : '#14532D' }}>{risk_band}</div>
         </motion.div>
@@ -53,6 +112,18 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
               {account_plan.pme_open > 0 && <span className="kpi-pill critical">🚨 {account_plan.pme_open} Open PME</span>}
               {account_plan.has_cancellation && <span className="kpi-pill critical">⚠️ Cancellation Recorded</span>}
             </div>
+
+            {account_plan.score_breakdown && account_plan.score_breakdown.length > 0 && (
+              <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Health Score Breakdown</div>
+                {account_plan.score_breakdown.map((item: any, idx: number) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#475569' }}>
+                    <span>{item.factor}</span>
+                    <span style={{ fontWeight: 700, color: item.impact.startsWith('-') ? '#DC2626' : '#16A34A' }}>{item.impact} pts</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -63,9 +134,26 @@ export default function AccountSummaryHeader({ intelligence }: { intelligence: a
           <span style={{ background: '#3B82F6', color: 'white', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.05em' }}>AI GENERATED</span>
           <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1E293B' }}>Executive Briefing</h3>
         </div>
-        <p style={{ margin: 0, fontSize: '1rem', lineHeight: 1.6, color: '#334155' }}>
-          {briefing || 'No briefing available.'}
-        </p>
+        <div style={{ margin: 0, fontSize: '1rem', lineHeight: 1.6, color: '#334155' }}>
+          {typeof briefing === 'string' ? (
+            <p style={{ margin: 0 }}>{briefing}</p>
+          ) : typeof briefing === 'object' && briefing !== null ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {Object.entries(briefing).map(([key, value]) => (
+                <div key={key}>
+                  <strong style={{ textTransform: 'capitalize', color: '#1E293B', marginRight: '0.5rem', display: 'inline-block' }}>
+                    {key.replace(/_/g, ' ')}:
+                  </strong> 
+                  <div style={{ display: 'block', marginTop: '0.25rem' }}>
+                    {renderValue(value)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ margin: 0 }}>No briefing available.</p>
+          )}
+        </div>
       </motion.div>
 
     </div>

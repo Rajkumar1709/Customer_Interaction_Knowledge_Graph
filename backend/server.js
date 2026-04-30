@@ -388,18 +388,35 @@ function buildAccountPlan(nodes) {
   if (!apNode) return null;
   const openHE = nodes.filter(n => n.label === 'HealthEvent' && n.properties.status === 'Open').length;
   const closedHE = nodes.filter(n => n.label === 'HealthEvent' && n.properties.status === 'Closed').length;
-  const hasCancellation = nodes.some(n => n.label === 'Cancellation');
+  const cancellations = nodes.filter(n => n.label === 'Cancellation').length;
   const pmeOpen = nodes.filter(n => n.label === 'PME' && (n.properties.status === 'Open' || n.properties.status === 'New')).length;
   const meetingNode = nodes.find(n => n.label === 'CustomerMeeting');
+  
+  const p1Tickets = nodes.filter(n => n.label === 'Ticket' && n.properties.severity && n.properties.severity.startsWith('P1')).length;
+  const p2Tickets = nodes.filter(n => n.label === 'Ticket' && n.properties.severity && n.properties.severity.startsWith('P2')).length;
+  const stalledImpl = nodes.filter(n => n.label === 'Implementation' && n.properties.phase === 'Stalled').length;
+  const isNonCore = apNode.properties.classification === 'Non-Core';
+
+  const breakdown = [];
+  breakdown.push({ factor: 'Base Score', impact: '+100' });
+  if (p1Tickets > 0) breakdown.push({ factor: `${p1Tickets} P1 Ticket(s)`, impact: `-${p1Tickets * 15}` });
+  if (p2Tickets > 0) breakdown.push({ factor: `${p2Tickets} P2 Ticket(s)`, impact: `-${p2Tickets * 8}` });
+  if (openHE > 0) breakdown.push({ factor: `${openHE} Open Health Event(s)`, impact: `-${openHE * 10}` });
+  if (pmeOpen > 0) breakdown.push({ factor: `${pmeOpen} Open PME(s)`, impact: `-${pmeOpen * 12}` });
+  if (stalledImpl > 0) breakdown.push({ factor: `${stalledImpl} Stalled Implementation(s)`, impact: `-${stalledImpl * 10}` });
+  if (cancellations > 0) breakdown.push({ factor: 'Cancellation History', impact: '-20' });
+  if (isNonCore) breakdown.push({ factor: 'Non-Core Account', impact: '-10' });
+
   return {
     classification: apNode.properties.classification,
     primary_solution: apNode.properties.primary_solution,
     secondary_solution: apNode.properties.secondary_solution,
     health_events_open: openHE,
     health_events_closed: closedHE,
-    has_cancellation: hasCancellation,
+    has_cancellation: cancellations > 0,
     pme_open: pmeOpen,
-    last_meeting: meetingNode ? meetingNode.properties.date : null
+    last_meeting: meetingNode ? meetingNode.properties.date : null,
+    score_breakdown: breakdown
   };
 }
 

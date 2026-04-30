@@ -12,17 +12,19 @@ function buildTimeline(nodes) {
       events.push({
         type: 'Ticket',
         date: new Date(props.created),
-        title: `Ticket Created: ${props.case_number}`,
+        title: `Ticket: ${props.case_number}`,
         description: props.subject,
-        severity: props.severity
+        severity: props.severity,
+        status: props.status || 'Open'
       });
     } else if (n.label === 'HealthEvent') {
       events.push({
         type: 'HealthEvent',
         date: new Date(props.reported_on),
         title: `Health Event: ${props.title}`,
-        description: props.description,
-        severity: props.severity
+        description: [props.issue_type !== 'N/A' ? props.issue_type : null, props.description].filter(Boolean).join(' · '),
+        severity: props.severity,
+        status: props.status || 'Open'
       });
     } else if (n.label === 'PME') {
       events.push({
@@ -30,24 +32,26 @@ function buildTimeline(nodes) {
         date: new Date(props.created_date),
         title: `Escalation: ${props.number}`,
         description: props.summary,
-        severity: props.priority
+        severity: props.priority,
+        status: props.status || 'Open'
       });
     } else if (n.label === 'Implementation') {
       events.push({
         type: 'Implementation',
         date: new Date(props.created),
-        title: `Implementation Started: ${props.product}`,
-        description: `Phase: ${props.phase}, Status: ${props.status}`,
-        severity: 'Normal'
+        title: `Implementation: ${props.product}`,
+        description: `Phase: ${props.phase}`,
+        severity: 'Normal',
+        status: props.status || 'In Progress'
       });
     } else if (n.label === 'Renewal') {
-      // Assuming close_date is near future or past
       events.push({
         type: 'Renewal',
         date: new Date(props.close_date),
-        title: `Renewal Opp: ${props.name}`,
-        description: `Stage: ${props.stage}, Amount: ${props.expected_rev}`,
-        severity: 'Normal'
+        title: `Renewal: ${props.name}`,
+        description: `Stage: ${props.stage} · ${props.expected_rev}`,
+        severity: 'Normal',
+        status: props.stage || 'Active'
       });
     } else if (n.label === 'Cancellation') {
       events.push({
@@ -55,7 +59,8 @@ function buildTimeline(nodes) {
         date: new Date(props.submitted_date),
         title: `Cancellation Submitted`,
         description: `Reason: ${props.reason}`,
-        severity: 'Critical'
+        severity: 'Critical',
+        status: props.status || 'Submitted'
       });
     }
   });
@@ -63,8 +68,15 @@ function buildTimeline(nodes) {
   // Sort chronological ascending (oldest to newest)
   events.sort((a, b) => a.date - b.date);
 
-  // Take the most recent 15 events to avoid blowing up the LLM payload
-  const recentEvents = events.slice(-15);
+  // Filter out closed/resolved events — only keep active/open items
+  const CLOSED_STATUSES = ['closed', 'resolved', 'completed', 'cancelled'];
+  const openEvents = events.filter(e => {
+    const s = String(e.status || '').toLowerCase();
+    return !CLOSED_STATUSES.some(cs => s.includes(cs));
+  });
+
+  // Take the most recent 15 open events
+  const recentEvents = openEvents.slice(-15);
   
   // Format dates back to string for easier JSON consumption
   return recentEvents.map(e => ({
@@ -88,7 +100,11 @@ The provided context includes an array of active graph nodes (Tickets, Implement
 
 Your goal is to generate a comprehensive, judge-ready JSON response with the following strictly formatted keys:
 
-1. "briefing": A concise, high-value executive summary of the account's current situation. Include open issues, renewal pressure, and major recent events. Limit to 3-4 sentences.
+1. "briefing": A high-value executive summary of the account's current situation. You MUST quantify with numbers (e.g., specific risk factors, health score impact, revenue implications). It MUST structurally cover:
+   - Why this account is risky (or healthy).
+   - What is factually happening (citing data).
+   - What it likely means (business implications).
+   - What attention it requires.
 2. "insights": An array of explainable AI insights. Each insight MUST have:
    - "title": A short string (e.g. "Rising Support Activity").
    - "type": "Risk" or "Opportunity" or "Observation".
@@ -103,7 +119,10 @@ Your goal is to generate a comprehensive, judge-ready JSON response with the fol
    - "executive": Focus on total revenue at risk, overall health, and strategic churn signals.
    - "implementation": Focus on onboarding bottlenecks, stalled phases, and SLA violations.
    - "renewals": Focus on upcoming contract dates, competitor presence, and cancellation history.
-4. "next_best_actions": Array of 3 highly actionable, pragmatic recommendations for the CSM.
+4. "next_best_actions": Array of 3 highly actionable recommendations. ORDER them by urgency (most urgent first). Each must be an object with:
+   - "action": The text of the recommendation.
+   - "owner": The specific role/team to assign this to (e.g., "CSM", "Sales", "Product", "Support", "Executive").
+   - "timeframe": "Immediate", "Short-term", or "Long-term".
 
 Ensure your analysis is heavily grounded in the provided data. Do not hallucinate data that is not in the context.
 

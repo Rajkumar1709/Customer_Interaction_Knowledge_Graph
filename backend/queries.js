@@ -121,12 +121,15 @@ async function getAccountGraph(accountId) {
 
     // ── 7. Cancellations ── full churn signal fields
     cancellations: query(`
-      SELECT Id, Name, Status__c as status,
-        Reason_for_Cancellation__c, Non_OMS_Products__c,
-        Non_OMS_Effective_Date__c, Submitted_Date__c,
-        PMC_Name__c, Unique_Products__c, Unique_Sites__c
-      FROM ${T('SFDC_Cancellation')} WHERE PMC__c = @id
-      ORDER BY Submitted_Date__c DESC LIMIT 12`, { id: accountId })
+      SELECT c.Id, c.Name, c.Status__c as status,
+        COALESCE(r.Name, c.Reason_for_Cancellation__c) as Reason_for_Cancellation__c, 
+        c.Non_OMS_Products__c,
+        c.Non_OMS_Effective_Date__c, c.Submitted_Date__c,
+        c.PMC_Name__c, c.Unique_Products__c, c.Unique_Sites__c
+      FROM ${T('SFDC_Cancellation')} c
+      LEFT JOIN ${T('SFDC_Cancellation_Reason')} r ON c.Reason_for_Cancellation__c = r.ID
+      WHERE c.PMC__c = @id
+      ORDER BY c.Submitted_Date__c DESC LIMIT 12`, { id: accountId })
   };
 
   const results = await Promise.allSettled(Object.values(queries));
@@ -223,7 +226,7 @@ async function getAccountGraph(accountId) {
         status:             he.status || 'Open',
         severity:           he.severity || 'N/A',
         title:              he.Title__c || he.Name || 'Health Event',
-        description:        he.Description__c || 'No description.',
+        description:        [he.Issue_Type__c, he.Escalation_Reason__c].filter(Boolean).join(' · ') || he.Title__c || 'Health Event Logged',
         issue_type:         he.Issue_Type__c || 'N/A',
         root_cause:         he.Root_Cause__c || 'N/A',
         sub_status:         he.Sub_Status__c || 'N/A',
